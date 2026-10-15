@@ -15,13 +15,15 @@ const FIELDS: {
   label: string
   prefix?: string
   suffix?: string
+  /** Display multiplier for the number box (100 shows a 0-1 share as %) */
+  scale?: number
   hint: string
 }[] = [
   {
     key: "pricePerHour",
     label: "Price per slice-hour",
     prefix: "$",
-    hint: "Average realized price after peak and off-peak multipliers.",
+    hint: "Average price at standard rates, before off-peak discounts.",
   },
   {
     key: "bookingsPerSitePerMonth",
@@ -38,6 +40,13 @@ const FIELDS: {
     key: "numberOfSites",
     label: "Number of sites",
     hint: "Campus and venue cell sites offering slices.",
+  },
+  {
+    key: "offPeakShare",
+    label: "Off-peak share",
+    suffix: "%",
+    scale: 100,
+    hint: "Share of booked hours outside 4–10 PM. Discounted, but attracts extra bookings.",
   },
 ]
 
@@ -65,7 +74,7 @@ export function AssumptionsPanel({
           </h2>
         </div>
         <span className="rounded-sm bg-gray-light px-2 py-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-          Editable
+          Simulated
         </span>
       </div>
 
@@ -73,10 +82,15 @@ export function AssumptionsPanel({
         {FIELDS.map((f) => {
           const lim = ASSUMPTION_LIMITS[f.key]
           const id = `assume-${f.key}`
+          const scale = f.scale ?? 1
+          const display = Math.round(value[f.key] * scale * 100) / 100
           return (
             <div key={f.key}>
               <div className="flex items-center justify-between gap-3">
                 <label htmlFor={id} className="text-sm font-semibold text-ink">
+                  <span className="block text-[10px] font-bold tracking-wide text-brand-red uppercase">
+                    Assumption
+                  </span>
                   {f.label}
                 </label>
                 <div className="flex items-center rounded-md border border-gray-mid focus-within:border-ink">
@@ -88,12 +102,12 @@ export function AssumptionsPanel({
                   <input
                     type="number"
                     inputMode="decimal"
-                    aria-label={`${f.label} value`}
+                    aria-label={`${f.label} (assumption), exact value`}
                     className="tabular h-8 w-16 bg-transparent px-2 text-right text-sm font-semibold text-ink outline-none"
-                    min={lim.min}
-                    max={lim.max}
-                    step={lim.step}
-                    value={value[f.key]}
+                    min={lim.min * scale}
+                    max={lim.max * scale}
+                    step={lim.step * scale}
+                    value={display}
                     // Accept free typing; clamp to the allowed range on blur
                     onChange={(e) => {
                       const n = Number(e.target.value)
@@ -102,7 +116,7 @@ export function AssumptionsPanel({
                         Number.isFinite(n) &&
                         n >= 0
                       ) {
-                        onChange({ ...value, [f.key]: n })
+                        onChange({ ...value, [f.key]: n / scale })
                       }
                     }}
                     onBlur={() =>
@@ -131,6 +145,7 @@ export function AssumptionsPanel({
                 step={lim.step}
                 value={value[f.key]}
                 aria-describedby={`${id}-hint`}
+                aria-valuetext={`${f.prefix ?? ""}${display}${f.suffix ?? ""}`}
                 onChange={(e) =>
                   onChange({ ...value, [f.key]: Number(e.target.value) })
                 }
@@ -161,6 +176,9 @@ export function AssumptionsPanel({
         <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Fixed assumptions
         </h3>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Every value here is an assumption, not data.
+        </p>
         <dl className="tabular mt-3 space-y-1.5 text-xs">
           {[
             ["Platform build (one-time)", formatUSD(BUSINESS.platformCost)],
@@ -176,6 +194,19 @@ export function AssumptionsPanel({
             [
               "Avg slice size",
               `${formatPct(BUSINESS.avgSliceCapacityShare)} of site capacity`,
+            ],
+            ["Off-peak discount", formatPct(BUSINESS.offPeakDiscount)],
+            [
+              "Off-peak demand uplift",
+              `+${formatPct(BUSINESS.offPeakDemandUplift)} × off-peak share`,
+            ],
+            [
+              "Bookings per customer",
+              `${BUSINESS.funnel.bookingsPerCustomer} per year`,
+            ],
+            [
+              "Funnel conversion",
+              `${formatPct(BUSINESS.funnel.repeatRate)} → ${formatPct(BUSINESS.funnel.recurringRate)} → ${formatPct(BUSINESS.funnel.enterpriseUpgradeRate)}`,
             ],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between gap-3">

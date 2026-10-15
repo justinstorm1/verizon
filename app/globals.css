@@ -22,6 +22,7 @@
   --color-danger: var(--danger);
   --color-danger-tint: var(--danger-tint);
   --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
 
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -66,7 +67,8 @@
   --success-tint: #e6f4ea;
   --danger: #c40000;
   --danger-tint: #fdeaea;
-  --warning: #a65a00;
+  --warning: #8f4e00;
+  --warning-tint: #fdf3e6;
 
   --background: #ffffff;
   --foreground: #000000;

@@ -235,6 +235,7 @@ export function DemoDashboard() {
           title="Latency"
           description="Round-trip time in milliseconds. Lower is better."
           actions={<ChartLegend items={LEGEND} />}
+          footer="Simulated network. Illustrative values."
         >
           <LiveChartSlot
             kind="latency"
@@ -246,6 +247,7 @@ export function DemoDashboard() {
           title="Throughput"
           description="Delivered downlink in megabits per second. Higher is better."
           actions={<ChartLegend items={LEGEND} />}
+          footer="Simulated network. Illustrative values."
         >
           <LiveChartSlot
             kind="throughput"

@@ -12,7 +12,12 @@ import { projectBusiness } from "@/lib/simulate"
 import { cn } from "@/lib/utils"
 
 import { AssumptionsPanel } from "./assumptions-panel"
-import { MonthlyChart, UseCaseDonut, UtilizationChart } from "./business-charts"
+import {
+  FunnelChart,
+  MonthlyChart,
+  UseCaseDonut,
+  UtilizationChart,
+} from "./business-charts"
 
 function MetricToggle({
   value,
@@ -97,7 +102,7 @@ export function BusinessDashboard() {
             label="Bookings, year one"
             value={formatInt(p.annualBookings)}
             icon={<Ticket />}
-            detail={`${formatInt(assumptions.numberOfSites)} sites · ${formatInt(p.annualBookings * assumptions.hoursPerBooking)} slice-hours`}
+            detail={`${formatInt(assumptions.numberOfSites)} sites · ${formatUSD(p.effectivePrice)}/hr effective price`}
           />
         </section>
 
@@ -118,12 +123,14 @@ export function BusinessDashboard() {
           <ChartCard
             title="Revenue by use case"
             description="Booking mix weighted by each use case's typical slice price and duration."
+            footer="Simulated. Booking mix is an assumption."
           >
             <UseCaseDonut data={p.revenueByUseCase} />
           </ChartCard>
           <ChartCard
             title="Cell utilization, before vs. after"
-            description="Average weekday load by hour. Off-peak pricing steers bookings into quieter hours."
+            description="Average weekday load by hour. The off-peak share decides how many slice-hours land outside 4–10 PM."
+            footer="Simulated. Baseline utilization curve is an assumption."
             actions={
               <ChartLegend
                 items={[
@@ -136,6 +143,14 @@ export function BusinessDashboard() {
             <UtilizationChart data={p.utilization} />
           </ChartCard>
         </div>
+
+        <ChartCard
+          title="Customer funnel: first booking to enterprise upgrade"
+          description="Self-serve customers who keep booking become leads for the enterprise slicing portfolio."
+          footer="Simulated from the funnel assumptions (bookings per customer and stage conversion rates)."
+        >
+          <FunnelChart data={p.funnel} />
+        </ChartCard>
       </div>
     </div>
   )

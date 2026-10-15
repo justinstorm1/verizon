@@ -14,6 +14,7 @@ import {
   ACTIVE_SLICES,
   BOOKING,
   BUSINESS,
+  DEVICE_TYPES,
   CAPACITY,
   DEMO,
   PRICING,
@@ -22,6 +23,8 @@ import {
   VENUES,
   type BusinessAssumptions,
   type DemandBandId,
+  type DeviceType,
+  type DeviceTypeId,
   type SliceProfile,
   type UseCaseId,
   type Venue,
@@ -493,6 +496,77 @@ export function cheaperAlternative(req: BookingRequest, current: Quote) {
   return best
 }
 
+/** Nearest start time on the same day (same duration) that doesn't oversell the site */
+export function availableAlternative(req: BookingRequest) {
+  let best: { startHour: number; total: number } | null = null
+  const lastStart = BOOKING.latestEndHour - req.durationHours
+  for (let s = BOOKING.earliestStartHour; s <= lastStart; s++) {
+    if (s === req.startHour) continue
+    const q = quoteBooking({ ...req, startHour: s })
+    if (q.oversold) continue
+    if (
+      !best ||
+      Math.abs(s - req.startHour) < Math.abs(best.startHour - req.startHour)
+    ) {
+      best = { startHour: s, total: q.total }
+    }
+  }
+  return best
+}
+
+export type CheckStatus = "pass" | "warn" | "fail"
+
+export interface EligibilityResult {
+  id: "coverage" | "device"
+  title: string
+  status: CheckStatus
+  detail: string
+  /** A concrete way forward when the check fails */
+  fix?: { label: string; venueId?: string; deviceId?: DeviceTypeId }
+}
+
+/** Simulated eligibility checks for a venue and device type */
+export function checkEligibility(
+  venueId: string,
+  deviceId: DeviceTypeId
+): EligibilityResult[] {
+  const venue = getVenue(venueId)
+  const device = getDevice(deviceId)
+  const alt = venue.alternativeVenueId
+    ? getVenue(venue.alternativeVenueId)
+    : null
+  return [
+    {
+      id: "coverage",
+      title: "Standalone 5G coverage at this site",
+      status:
+        venue.saCoverage === "full"
+          ? "pass"
+          : venue.saCoverage === "partial"
+            ? "warn"
+            : "fail",
+      detail: venue.coverageNote,
+      fix: alt
+        ? { label: `Switch to ${alt.name}`, venueId: alt.id }
+        : undefined,
+    },
+    {
+      id: "device",
+      title: "Device compatibility",
+      status: device.result,
+      detail: device.message,
+      fix:
+        device.alternativeId && device.alternativeLabel
+          ? { label: device.alternativeLabel, deviceId: device.alternativeId }
+          : undefined,
+    },
+  ]
+}
+
+export function getDevice(id: DeviceTypeId): DeviceType {
+  return DEVICE_TYPES.find((d) => d.id === id) ?? DEVICE_TYPES[0]
+}
+
 export function bookingReference(req: BookingRequest) {
   const h = hashString(JSON.stringify(req)).toString(36).toUpperCase()
   return `SL-${h.slice(0, 6).padEnd(6, "0")}`
@@ -530,6 +604,7 @@ export interface BusinessProjection {
   annualBookings: number
   upfrontCost: number
   steadyStateMonthlyRevenue: number
+  effectivePrice: number
   paybackMonths: number | null
   revenueByUseCase: UseCaseRevenue[]
   utilization: UtilizationPoint[]
@@ -539,6 +614,7 @@ export interface BusinessProjection {
   utilizationLiftPct: number
   nonPeakLiftPts: number
   peakLiftPts: number
+  funnel: FunnelStage[]
 }
 
 export function hourLabel(hour: number) {
@@ -548,10 +624,31 @@ export function hourLabel(hour: number) {
   return `${display} ${suffix}`
 }
 
+export interface FunnelStage {
+  stage: string
+  description: string
+  customers: number
+}
+
+/** Monthly bookings per site once off-peak discounts attract extra demand */
+export function effectiveBookingsPerSite(a: BusinessAssumptions) {
+  return (
+    a.bookingsPerSitePerMonth *
+    (1 + a.offPeakShare * BUSINESS.offPeakDemandUplift)
+  )
+}
+
+/** Effective price per hour once off-peak discounts are applied */
+export function effectiveHourlyPrice(a: BusinessAssumptions) {
+  return a.pricePerHour * (1 - a.offPeakShare * BUSINESS.offPeakDiscount)
+}
+
 export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
   const upfrontCost =
     BUSINESS.platformCost + BUSINESS.perSiteCost * a.numberOfSites
   const netShare = 1 - BUSINESS.operatingCostShare
+  const price = effectiveHourlyPrice(a)
+  const bookingsPerSite = effectiveBookingsPerSite(a)
 
   let cumulative = -upfrontCost
   const months: MonthProjection[] = []
@@ -559,10 +656,8 @@ export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
     const adoption =
       BUSINESS.adoptionStart +
       (1 - BUSINESS.adoptionStart) * smoothstep((m - 1) / (BUSINESS.months - 1))
-    const bookings = Math.round(
-      a.bookingsPerSitePerMonth * a.numberOfSites * adoption
-    )
-    const revenue = bookings * a.hoursPerBooking * a.pricePerHour
+    const bookings = Math.round(bookingsPerSite * a.numberOfSites * adoption)
+    const revenue = bookings * a.hoursPerBooking * price
     cumulative += revenue * netShare
     months.push({
       month: m,
@@ -576,10 +671,7 @@ export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
   const annualRevenue = months.reduce((s, m) => s + m.revenue, 0)
   const annualBookings = months.reduce((s, m) => s + m.bookings, 0)
   const steadyStateMonthlyRevenue =
-    a.bookingsPerSitePerMonth *
-    a.numberOfSites *
-    a.hoursPerBooking *
-    a.pricePerHour
+    bookingsPerSite * a.numberOfSites * a.hoursPerBooking * price
 
   // Payback: first month cumulative net turns positive, extrapolated past month 12.
   let paybackMonths: number | null = null
@@ -609,25 +701,29 @@ export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
     value: (annualRevenue * weights[i]) / totalWeight,
   }))
 
-  // Utilization: steady-state slice-hours spread across the day, nudged by price.
+  // Utilization: steady-state slice-hours per site per day. The off-peak share
+  // goes to hours outside peak pricing, the rest to peak hours. Within each group,
+  // hours are weighted by event demand x headroom left on the cell.
   const dailySliceHours =
-    (a.bookingsPerSitePerMonth * a.hoursPerBooking) / BUSINESS.daysPerMonth
-  // Weight = event demand x price incentive x headroom left on the cell at that hour.
-  const hourWeights = BUSINESS.eventPropensity.map((p, h) => {
-    const priceIncentive =
-      (1 / PRICING.demandBands[demandBand(h)].multiplier) **
-      BUSINESS.priceElasticity
-    const headroom = Math.max(
-      0,
-      (BUSINESS.utilizationCap - BUSINESS.baselineUtilization[h]) /
-        BUSINESS.utilizationCap
-    )
-    return p * priceIncentive * headroom
-  })
-  const hourWeightSum = hourWeights.reduce((s, w) => s + w, 0)
+    (bookingsPerSite * a.hoursPerBooking) / BUSINESS.daysPerMonth
+  const isPeak = (h: number) => demandBand(h) === "peak"
+  const baseWeight = BUSINESS.eventPropensity.map(
+    (p, h) =>
+      p *
+      Math.max(
+        0,
+        (BUSINESS.utilizationCap - BUSINESS.baselineUtilization[h]) /
+          BUSINESS.utilizationCap
+      )
+  )
+  const peakSum = baseWeight.reduce((s, w, h) => s + (isPeak(h) ? w : 0), 0)
+  const offSum = baseWeight.reduce((s, w, h) => s + (isPeak(h) ? 0 : w), 0)
   const utilization = BUSINESS.baselineUtilization.map((before, hour) => {
-    const concurrentSlices =
-      (dailySliceHours * hourWeights[hour]) / hourWeightSum
+    const groupShare = isPeak(hour) ? 1 - a.offPeakShare : a.offPeakShare
+    const groupSum = isPeak(hour) ? peakSum : offSum
+    const concurrentSlices = groupSum
+      ? (dailySliceHours * groupShare * baseWeight[hour]) / groupSum
+      : 0
     const added = concurrentSlices * BUSINESS.avgSliceCapacityShare * 100
     return {
       hour,
@@ -642,7 +738,36 @@ export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
 
   const avgUtilizationBefore = mean(utilization.map((u) => u.before))
   const avgUtilizationAfter = mean(utilization.map((u) => u.after))
-  const nonPeak = utilization.filter((u) => demandBand(u.hour) !== "peak")
+  const nonPeak = utilization.filter((u) => !isPeak(u.hour))
+
+  // Funnel: unique first-time customers through to enterprise upgrade leads.
+  const f = BUSINESS.funnel
+  const firstTime = Math.round(annualBookings / f.bookingsPerCustomer)
+  const repeat = Math.round(firstTime * f.repeatRate)
+  const recurring = Math.round(repeat * f.recurringRate)
+  const upgrade = Math.round(recurring * f.enterpriseUpgradeRate)
+  const funnel: FunnelStage[] = [
+    {
+      stage: "First booking",
+      description: "Unique customers who book once",
+      customers: firstTime,
+    },
+    {
+      stage: "Repeat booking",
+      description: "Book again within the year",
+      customers: repeat,
+    },
+    {
+      stage: "Recurring / multi-site",
+      description: "Regular schedule or several venues",
+      customers: recurring,
+    },
+    {
+      stage: "Enterprise upgrade",
+      description: "Referred to an enterprise slicing contract",
+      customers: upgrade,
+    },
+  ]
 
   return {
     months,
@@ -650,6 +775,7 @@ export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
     annualBookings,
     upfrontCost,
     steadyStateMonthlyRevenue,
+    effectivePrice: price,
     paybackMonths,
     revenueByUseCase,
     utilization,
@@ -660,9 +786,8 @@ export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
       (avgUtilizationAfter - avgUtilizationBefore) / avgUtilizationBefore,
     nonPeakLiftPts: mean(nonPeak.map((u) => u.after - u.before)),
     peakLiftPts: mean(
-      utilization
-        .filter((u) => demandBand(u.hour) === "peak")
-        .map((u) => u.after - u.before)
+      utilization.filter((u) => isPeak(u.hour)).map((u) => u.after - u.before)
     ),
+    funnel,
   }
 }

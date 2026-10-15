@@ -19,43 +19,57 @@ export interface ArchNode {
 
 export const ARCH_NODES: ArchNode[] = [
   {
-    title: "Customer app",
+    title: "Customer storefront",
     caption:
-      "Web portal where customers pick a venue, time, use case, and slice profile.",
+      "Self-serve web storefront: browse packages, pick a venue and time, and book.",
     icon: Smartphone,
   },
   {
-    title: "Pricing & scheduling engine",
+    title: "Eligibility and capacity engine",
     caption:
-      "Applies time-of-day, weekend, and scarcity multipliers, and holds the booking calendar.",
-    icon: CalendarClock,
-  },
-  {
-    title: "Capacity check",
-    caption:
-      "Adds up reservations per cell site and hour, and rejects anything above 85% of sliceable capacity.",
+      "Checks standalone 5G coverage and device compatibility, and blocks any booking that would oversell a site.",
     icon: Gauge,
   },
   {
-    title: "Slice provisioning API",
+    title: "Pricing and scheduling",
     caption:
-      "Requests a slice with QoS targets through a network-exposure interface. Mocked in this demo.",
+      "Applies peak, off-peak, weekend, and scarcity multipliers, and holds the booking calendar.",
+    icon: CalendarClock,
+  },
+  {
+    title: "Slice provisioning",
+    caption:
+      "Simulated; would integrate with the operator's orchestration systems.",
     icon: Cpu,
     simulated: true,
   },
   {
-    title: "5G core / edge",
+    title: "5G standalone core and edge",
     caption:
-      "The standalone core and RAN enforce the slice, with a user-plane function at the edge near the venue.",
+      "The standalone core and RAN enforce the slice, with user-plane processing at the edge near the venue.",
     icon: RadioTower,
   },
   {
-    title: "Monitoring dashboard",
+    title: "Monitoring and SLA dashboard",
     caption:
-      "Streams latency, throughput, and loss per slice, and flags SLA breaches for automatic credits.",
+      "Shows aggregate latency, throughput, and loss per slice, and flags any missed guarantee.",
     icon: Activity,
   },
 ]
+
+/** Greedy word wrap for SVG text (SVG has no automatic wrapping) */
+function wrapWords(text: string, maxChars: number) {
+  const lines: string[] = []
+  for (const word of text.split(" ")) {
+    const last = lines[lines.length - 1]
+    if (last && `${last} ${word}`.length <= maxChars) {
+      lines[lines.length - 1] = `${last} ${word}`
+    } else {
+      lines.push(word)
+    }
+  }
+  return lines
+}
 
 // Desktop diagram geometry (SVG user units; scales with container width)
 const W = 1200
@@ -129,15 +143,7 @@ function DesktopDiagram() {
 
         {ARCH_NODES.map((n, i) => {
           const bx = x(i)
-          const words = n.title.split(" ")
-          // Two-line wrap for longer titles
-          const lines =
-            n.title.length > 16
-              ? [
-                  words.slice(0, Math.ceil(words.length / 2)).join(" "),
-                  words.slice(Math.ceil(words.length / 2)).join(" "),
-                ]
-              : [n.title]
+          const lines = wrapWords(n.title, 15)
           return (
             <g key={n.title}>
               <rect
@@ -195,8 +201,8 @@ function DesktopDiagram() {
                 <text
                   key={li}
                   x={bx + 14}
-                  y={BOX_Y + 70 + li * 20 - (lines.length - 1) * 4}
-                  fontSize="16"
+                  y={BOX_Y + 66 + li * 19 - (lines.length - 1) * 6}
+                  fontSize="15"
                   fontWeight="700"
                   fill="#000"
                 >
@@ -284,7 +290,7 @@ function ListDiagram() {
             </div>
           ) : (
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              Monitoring data flows back to step 2 to tune prices and capacity.
+              Monitoring data flows back to the eligibility and capacity engine.
             </p>
           )}
         </li>

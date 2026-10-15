@@ -45,7 +45,12 @@ export function StepWizard({
   return (
     <div ref={rootRef} className={cn("scroll-mt-24", className)}>
       <nav aria-label="Booking progress">
-        <ol className="grid grid-cols-3 gap-2 sm:gap-4">
+        <ol
+          className="grid gap-2 sm:gap-4"
+          style={{
+            gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))`,
+          }}
+        >
           {steps.map((step, i) => {
             const done = i < current
             const active = i === current
@@ -65,7 +70,7 @@ export function StepWizard({
                 >
                   {done ? <Check className="size-4" strokeWidth={3} /> : i + 1}
                 </span>
-                <span className="min-w-0 text-left">
+                <span className="w-full min-w-0 text-left">
                   <span className="sr-only">
                     Step {i + 1} of {steps.length}
                     {done ? ", completed" : ""}:{" "}
@@ -103,12 +108,14 @@ export function StepWizard({
                   <button
                     type="button"
                     onClick={() => onStepSelect(i)}
-                    className="flex w-full items-center gap-3 rounded-md hover:opacity-80"
+                    className="flex w-full flex-col items-start gap-2 rounded-md hover:opacity-80 sm:flex-row sm:items-center sm:gap-3"
                   >
                     {content}
                   </button>
                 ) : (
-                  <div className="flex items-center gap-3">{content}</div>
+                  <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    {content}
+                  </div>
                 )}
               </li>
             )

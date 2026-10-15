@@ -1,6 +1,9 @@
 "use client"
 
 import { RotateCcw, Sparkles } from "lucide-react"
+import { useEffect, useState } from "react"
+
+import { EligibilityCheck } from "@/components/eligibility-check"
 
 import { USE_CASE_ICONS } from "@/components/use-case-icon"
 import { Field, controlClass } from "@/components/ui/field"
@@ -8,16 +11,21 @@ import { Select } from "@/components/ui/select"
 import {
   BOOKING,
   CAPACITY,
+  DEVICE_TYPES,
+  PACKAGES,
   PROFILE_LIMITS,
   USE_CASE_ORDER,
   USE_CASES,
   VENUES,
+  type DeviceTypeId,
   type Reliability,
   type SliceProfile,
   type UseCaseId,
 } from "@/lib/config"
 import { formatDateLong, formatInt, formatUSD } from "@/lib/format"
 import {
+  checkEligibility,
+  getDevice,
   getVenue,
   hourLabel,
   type BookingRequest,
@@ -196,6 +204,86 @@ export function StepDetails({
 }
 
 // ---------------------------------------------------------------------------
+// Step 2: eligibility (simulated)
+// ---------------------------------------------------------------------------
+
+export function StepEligibility({
+  request,
+  deviceId,
+  onDeviceChange,
+  onVenueChange,
+}: {
+  request: BookingRequest
+  deviceId: DeviceTypeId
+  onDeviceChange: (id: DeviceTypeId) => void
+  onVenueChange: (venueId: string) => void
+}) {
+  const venue = getVenue(request.venueId)
+  const results = checkEligibility(request.venueId, deviceId)
+  // Simulated check latency so the pass/fail state reads as a real lookup.
+  const key = `${request.venueId}|${deviceId}`
+  const [doneKey, setDoneKey] = useState<string | null>(null)
+  useEffect(() => {
+    const t = window.setTimeout(() => setDoneKey(key), 900)
+    return () => window.clearTimeout(t)
+  }, [key])
+  const checking = doneKey !== key
+  const failed = results.filter((r) => r.status === "fail").length
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-xl font-bold text-ink">Check eligibility</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Slices need standalone 5G at the venue and devices that can join one.
+          These checks are simulated.
+        </p>
+      </div>
+
+      <Field
+        id="device"
+        label="What devices will use the slice?"
+        hint="Pick the main device type. You can add others later."
+      >
+        <Select
+          id="device"
+          value={deviceId}
+          aria-describedby="device-hint"
+          onChange={(e) => onDeviceChange(e.target.value as DeviceTypeId)}
+        >
+          {DEVICE_TYPES.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <div>
+        <p className="mb-3 text-sm font-semibold text-ink">
+          Results for {venue.name}
+        </p>
+        <EligibilityCheck
+          results={results}
+          checking={checking}
+          onFix={(fix) => {
+            if (fix.venueId) onVenueChange(fix.venueId)
+            if (fix.deviceId) onDeviceChange(fix.deviceId)
+          }}
+        />
+        <p className="sr-only" role="status">
+          {checking
+            ? "Running eligibility checks"
+            : failed
+              ? `${failed} check${failed > 1 ? "s" : ""} failed. A suggested fix is shown.`
+              : "All eligibility checks passed."}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Step 2: slice profile, price, capacity
 // ---------------------------------------------------------------------------
 
@@ -265,13 +353,18 @@ function RangeField({
 export function StepProfile({
   request,
   quote,
+  availableTime,
   onProfileChange,
   onReset,
+  onStartHourChange,
 }: {
   request: BookingRequest
   quote: Quote
+  /** Nearest start time that fits when this booking would oversell the site */
+  availableTime: { startHour: number; total: number } | null
   onProfileChange: (patch: Partial<SliceProfile>) => void
   onReset: () => void
+  onStartHourChange: (startHour: number) => void
 }) {
   const uc = USE_CASES[request.useCase]
   const venue = getVenue(request.venueId)
@@ -387,6 +480,14 @@ export function StepProfile({
           quote={quote}
           venueName={venue.name}
           onFitThroughput={(mbps) => onProfileChange({ throughputMbps: mbps })}
+          alternateTime={
+            availableTime
+              ? {
+                  label: `${hourLabel(availableTime.startHour)}–${hourLabel(availableTime.startHour + request.durationHours)}`,
+                  apply: () => onStartHourChange(availableTime.startHour),
+                }
+              : null
+          }
         />
         <p className="mt-3 text-xs text-muted-foreground">
           Bookings are checked against every hour in your window. We keep{" "}
@@ -405,12 +506,15 @@ export function StepProfile({
 export function StepReview({
   request,
   quote,
+  deviceId,
 }: {
   request: BookingRequest
   quote: Quote
+  deviceId: DeviceTypeId
 }) {
   const venue = getVenue(request.venueId)
   const uc = USE_CASES[request.useCase]
+  const device = getDevice(deviceId)
   const rows: [string, string][] = [
     ["Location", venue.name],
     ["Date", formatDateLong(request.dateISO)],
@@ -419,6 +523,14 @@ export function StepReview({
       `${hourLabel(request.startHour)} to ${hourLabel(request.startHour + request.durationHours)} (${request.durationHours} h)`,
     ],
     ["Use case", uc.label],
+    ["Package", PACKAGES[uc.packageId].name],
+    ["Devices", device.label],
+    [
+      "Eligibility",
+      venue.saCoverage === "partial" || device.result === "warn"
+        ? "Passed, with notes"
+        : "Passed",
+    ],
     ["Guaranteed throughput", `${request.profile.throughputMbps} Mbps`],
     ["Maximum latency", `${request.profile.maxLatencyMs} ms`],
     ["Reliability", `${request.profile.reliability}%`],
@@ -448,7 +560,10 @@ export function StepReview({
           </div>
         ))}
       </dl>
-      <ul className="mt-5 space-y-1.5 text-sm text-muted-foreground">
+      <p className="mt-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        Concept terms (illustrative)
+      </p>
+      <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
         <li>· The slice activates 15 minutes before your start time.</li>
         <li>
           · If the guarantee is missed in any hour, that hour is credited

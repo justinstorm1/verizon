@@ -10,23 +10,23 @@ export const metadata: Metadata = { title: "Architecture" }
 const PRIVACY = [
   {
     icon: Eye,
-    title: "No content inspection",
-    body: "Monitoring uses network performance counters only: latency, throughput, and loss per slice. We never inspect what customers send.",
+    title: "Aggregate performance only",
+    body: "Customers see latency, throughput, and loss for their slice as a whole, never for individual devices or people.",
+  },
+  {
+    icon: FileLock2,
+    title: "No personal data in monitoring",
+    body: "Monitoring uses network performance counters only. No names, phone numbers, locations, or traffic content.",
   },
   {
     icon: KeyRound,
     title: "Scoped access",
-    body: "Each booking gets its own API credentials. Customers can see telemetry for their own slices and nothing else.",
+    body: "Each booking gets its own credentials, so a customer can only see their own slices.",
   },
   {
     icon: Lock,
     title: "Isolation by design",
-    body: "Each slice runs on reserved radio and core resources, so traffic from one customer can't affect another's.",
-  },
-  {
-    icon: FileLock2,
-    title: "Minimal data",
-    body: "Booking needs only a contact and a payment method. Telemetry is aggregated after 30 days. This demo stores nothing; it all runs in your browser.",
+    body: "Each slice runs on reserved resources, so one customer's traffic can't affect another's. This demo stores nothing; it all runs in your browser.",
   },
 ]
 
@@ -36,7 +36,7 @@ export default function ArchitecturePage() {
       <PageHeader
         eyebrow="Architecture"
         title="From booking to a guaranteed slice"
-        description="A booking moves through pricing, a capacity check, and provisioning before the 5G core enforces it. Monitoring then checks the guarantee for its whole duration."
+        description="A booking passes eligibility and capacity checks, gets priced and scheduled, and is provisioned before the 5G standalone core enforces it. Monitoring then checks the guarantee for its whole duration."
       />
 
       <Container className="py-12 sm:py-16">
@@ -85,7 +85,7 @@ export default function ArchitecturePage() {
                 id="privacy-heading"
                 className="text-2xl font-extrabold tracking-[-0.02em] text-ink"
               >
-                Privacy and security
+                Security and privacy
               </h2>
             </div>
             <ul className="mt-6 grid gap-6 sm:grid-cols-2">
@@ -117,8 +117,9 @@ export default function ArchitecturePage() {
               <div>
                 <dt className="font-semibold text-ink">In this prototype</dt>
                 <dd className="mt-1 text-muted-foreground">
-                  The booking UI, pricing engine, capacity check, and monitoring
-                  views. All of them run on a seeded simulation in the browser.
+                  The storefront, eligibility checks, pricing engine, capacity
+                  check, and monitoring views. All of them run on a seeded
+                  simulation in the browser.
                 </dd>
               </div>
               <div>
@@ -131,10 +132,10 @@ export default function ArchitecturePage() {
               <div>
                 <dt className="font-semibold text-ink">In production</dt>
                 <dd className="mt-1 text-muted-foreground">
-                  Provisioning would go through the operator&apos;s
-                  network-exposure layer, for example 3GPP NEF with CAMARA-style
-                  network slice booking and quality-on-demand APIs. It would run
-                  on a standalone 5G core with slice-aware RAN scheduling.
+                  Provisioning would integrate with the operator&apos;s
+                  orchestration systems, for example through a network-exposure
+                  layer such as 3GPP NEF or CAMARA-style slice booking APIs, on
+                  a standalone 5G core with slice-aware RAN scheduling.
                 </dd>
               </div>
             </dl>

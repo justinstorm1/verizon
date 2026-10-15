@@ -12,15 +12,15 @@ export function SiteFooter() {
             Slice<span className="text-brand-red">Live</span>
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
-            Student concept for NJIT Verizon Smart Campus Competition. All data
-            simulated. Not affiliated with Verizon.
+            Student concept for the NJIT Verizon Smart Campus Competition. All
+            data simulated. Not affiliated with Verizon.
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Pillar: Next-Gen Products &amp; Services
           </p>
         </div>
         <nav aria-label="Footer">
-          <ul className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm">
+          <ul className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm sm:grid-cols-3">
             {NAV_ITEMS.map((item) => (
               <li key={item.href}>
                 <Link

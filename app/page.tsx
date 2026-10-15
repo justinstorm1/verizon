@@ -1,29 +1,32 @@
 import {
   ArrowRight,
+  BadgeCheck,
   CalendarClock,
-  Gamepad2,
+  Check,
+  CircleDollarSign,
   Gauge,
-  Layers,
-  MapPin,
+  LayoutGrid,
+  LineChart,
   RadioTower,
   ShieldCheck,
   TrendingUp,
-  Truck,
-  Video,
+  Zap,
 } from "lucide-react"
 import Link from "next/link"
 
 import { Container } from "@/components/layout/container"
 import { SliceBadge } from "@/components/slice-badge"
 import { buttonVariants } from "@/components/ui/button"
+import { USE_CASE_ICONS } from "@/components/use-case-icon"
 import {
   DEFAULT_ASSUMPTIONS,
   DEMO,
+  PACKAGES,
   PRICING,
   USE_CASES,
   type UseCaseId,
 } from "@/lib/config"
-import { formatPct, formatUSD, formatUSDCompact } from "@/lib/format"
+import { formatInt, formatUSD, formatUSDCompact } from "@/lib/format"
 import {
   getVenue,
   hourLabel,
@@ -37,7 +40,6 @@ const SAMPLE_DATE = "2026-10-17"
 
 const SCENARIOS: {
   useCase: UseCaseId
-  icon: typeof Video
   title: string
   problem: string
   outcome: string
@@ -46,28 +48,25 @@ const SCENARIOS: {
 }[] = [
   {
     useCase: "livestream",
-    icon: Video,
-    title: "The homecoming livestream",
+    title: "Homecoming livestream",
     problem:
-      "At kickoff, 6,000 fans start posting video. The crew's uplink stalls and the stream drops to 240p.",
-    outcome: "The broadcast holds 1080p from kickoff to the final whistle.",
+      "At kickoff, thousands of fans start posting video, and the student media crew's uplink stalls.",
+    outcome:
+      "The broadcast holds full quality from kickoff to the final whistle.",
     venueId: "campus-green",
     startHour: 13,
   },
   {
     useCase: "food-trucks",
-    icon: Truck,
     title: "Food truck row at lunch",
     problem:
       "When the quad fills at noon, card readers on the shared network time out and lines stall.",
-    outcome:
-      "Six vendors take payments without retries, even at the lunch peak.",
+    outcome: "Every vendor keeps taking payments through the lunch peak.",
     venueId: "food-truck-row",
     startHour: 10,
   },
   {
     useCase: "esports",
-    icon: Gamepad2,
     title: "Hackathon and esports finals",
     problem:
       "Lag spikes decide matches, and live demos freeze in front of the judges.",
@@ -75,33 +74,73 @@ const SCENARIOS: {
     venueId: "esports-arena",
     startHour: 12,
   },
+  {
+    useCase: "popup-retail",
+    title: "Weekend makers market",
+    problem:
+      "Student sellers take cards and mobile orders in a crowded atrium, and checkout keeps failing.",
+    outcome: "A small, very reliable slice keeps every sale going through.",
+    venueId: "innovation-hall",
+    startHour: 10,
+  },
+]
+
+const GAP_ROWS: [string, string, string][] = [
+  [
+    "Who it's built for",
+    "Large organizations with an account team",
+    "Small businesses, student orgs, and event organizers",
+  ],
+  [
+    "How you buy",
+    "Sales conversation and a custom quote",
+    "Self-serve storefront with an instant quote",
+  ],
+  ["Commitment", "Longer-term agreements", "By the hour"],
+  [
+    "Time to set up",
+    "Planned with the account team",
+    "Scheduled online in minutes",
+  ],
+  ["Pricing", "Negotiated per customer", "Published, with off-peak discounts"],
+  [
+    "Proof it worked",
+    "Reports through the account team",
+    "Live SLA dashboard for every booking",
+  ],
 ]
 
 const STEPS = [
   {
-    icon: MapPin,
-    title: "Pick a place and time",
-    body: "Choose a campus venue, a date, and the hours you need coverage.",
+    icon: LayoutGrid,
+    title: "Choose",
+    body: "Pick a venue, a time window, and a package that fits your event.",
   },
   {
-    icon: Layers,
-    title: "Get a recommended slice",
-    body: "We suggest throughput, latency, and reliability for your use case. Adjust as needed.",
+    icon: BadgeCheck,
+    title: "Check eligibility",
+    body: "We confirm standalone 5G coverage at the site and that your devices can join a slice.",
   },
   {
-    icon: CalendarClock,
-    title: "See price and capacity",
-    body: "Your quote updates live with demand, and we never oversell the cell site.",
+    icon: CircleDollarSign,
+    title: "Price",
+    body: "Get an instant, demand-based quote. We never oversell the site's capacity.",
   },
   {
-    icon: ShieldCheck,
-    title: "Go live, guaranteed",
-    body: "The slice activates on schedule and is monitored against its guarantee.",
+    icon: Zap,
+    title: "Activate",
+    body: "The slice is scheduled and switches on before your event starts.",
+  },
+  {
+    icon: LineChart,
+    title: "Prove",
+    body: "Watch latency and throughput against the guarantee live, then get a report.",
   },
 ]
 
 function HeroPreview() {
   const uc = USE_CASES.livestream
+  const pkg = PACKAGES[uc.packageId]
   const quote = quoteBooking({
     venueId: "campus-green",
     dateISO: SAMPLE_DATE,
@@ -122,16 +161,16 @@ function HeroPreview() {
       />
       <figure
         className="rounded-xl border border-gray-mid bg-white p-6 shadow-raised"
-        aria-label="Example booking preview"
+        aria-label="Example booking preview with simulated values"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Booking preview
+              Booking preview · {pkg.name}
             </p>
             <p className="mt-1 text-lg font-bold text-ink">{venue.name}</p>
             <p className="text-sm text-muted-foreground">
-              Saturday · {hourLabel(18)} to {hourLabel(22)} · {uc.label}
+              Saturday · {hourLabel(18)} to {hourLabel(22)}
             </p>
           </div>
           <SliceBadge status="met" />
@@ -157,7 +196,10 @@ function HeroPreview() {
 
         <div className="mt-6">
           <p className="text-sm font-semibold text-ink">
-            Latency during a crowd surge
+            Latency during a crowd surge{" "}
+            <span className="font-normal text-muted-foreground">
+              (simulated)
+            </span>
           </p>
           <div className="mt-3 space-y-3 text-sm">
             <div>
@@ -211,10 +253,38 @@ function HeroPreview() {
   )
 }
 
+function SectionIntro({
+  id,
+  eyebrow,
+  title,
+  body,
+}: {
+  id: string
+  eyebrow: string
+  title: string
+  body?: string
+}) {
+  return (
+    <div className="max-w-2xl">
+      <p className="text-sm font-semibold text-brand-red">{eyebrow}</p>
+      <h2
+        id={id}
+        className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-balance text-ink sm:text-4xl"
+      >
+        {title}
+      </h2>
+      {body ? (
+        <p className="mt-4 text-lg text-muted-foreground">{body}</p>
+      ) : null}
+    </div>
+  )
+}
+
 export default function Home() {
   const business = projectBusiness(DEFAULT_ASSUMPTIONS)
   const offPeakRate =
     PRICING.baseHourlyRate * PRICING.demandBands["off-peak"].multiplier
+  const upgradeLeads = business.funnel[business.funnel.length - 1].customers
 
   return (
     <>
@@ -227,16 +297,16 @@ export default function Home() {
                 className="size-1.5 rounded-full bg-brand-red"
                 aria-hidden="true"
               />
-              On-demand 5G network slicing
+              Self-serve 5G network slicing
             </p>
             <h1 className="mt-6 text-5xl leading-[1.02] font-extrabold tracking-[-0.04em] text-balance text-ink sm:text-6xl lg:text-7xl">
-              Guaranteed 5G, booked in a minute.
+              Guaranteed 5G, booked in minutes.
             </h1>
             <p className="mt-6 max-w-xl text-lg text-pretty text-muted-foreground sm:text-xl">
-              SliceLive lets event crews, vendors, and organizers reserve a
-              dedicated slice of the 5G network by the hour. Throughput,
-              latency, and reliability are guaranteed, and the price follows
-              demand.
+              SliceLive is a self-serve storefront on top of Verizon&apos;s
+              network-slicing portfolio. Small businesses, student orgs, and
+              event organizers book a slice with guaranteed throughput and
+              latency by the hour, without a sales contract.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/book" className={buttonVariants({ size: "lg" })}>
@@ -247,14 +317,14 @@ export default function Home() {
                 href="/demo"
                 className={buttonVariants({ size: "lg", variant: "outline" })}
               >
-                View live demo
+                See the live demo
               </Link>
             </div>
             <dl className="mt-12 grid max-w-xl grid-cols-3 gap-6 border-t border-gray-mid pt-6">
               {[
-                [`≤${DEMO.slice.guaranteeLatencyMs} ms`, "guaranteed latency"],
+                [`≤${DEMO.slice.guaranteeLatencyMs} ms`, "latency guarantee"],
                 [`${formatUSD(offPeakRate)}/hr`, "off-peak starting rate"],
-                ["3 steps", "from venue to live slice"],
+                ["5 steps", "from choosing to proof"],
               ].map(([value, label]) => (
                 <div key={label}>
                   <dt className="sr-only">{label}</dt>
@@ -269,37 +339,95 @@ export default function Home() {
                 </div>
               ))}
             </dl>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Illustrative profile and simulated pricing.
+            </p>
           </div>
           <HeroPreview />
         </Container>
       </section>
 
+      {/* The gap */}
+      <section className="py-20" aria-labelledby="gap-heading">
+        <Container>
+          <SectionIntro
+            id="gap-heading"
+            eyebrow="The gap"
+            title="Network slices exist. Small customers can't easily buy them."
+            body="Slicing is sold mainly through enterprise channels today. That works for large, long-term deployments, but not for a student org that needs guaranteed coverage for one Saturday."
+          />
+          <div className="mt-10 overflow-x-auto rounded-lg border border-gray-mid shadow-card">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <caption className="sr-only">
+                Comparison of enterprise-sales-led slicing today with SliceLive
+              </caption>
+              <thead>
+                <tr className="border-b border-gray-mid">
+                  <th scope="col" className="w-1/5 bg-white px-5 py-4" />
+                  <th
+                    scope="col"
+                    className="bg-gray-light px-5 py-4 text-base font-bold text-ink"
+                  >
+                    Today: enterprise-led
+                  </th>
+                  <th
+                    scope="col"
+                    className="bg-ink px-5 py-4 text-base font-bold text-white"
+                  >
+                    Slice<span className="text-brand-red">Live</span>:
+                    self-serve
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-mid">
+                {GAP_ROWS.map(([label, today, slicelive]) => (
+                  <tr key={label}>
+                    <th
+                      scope="row"
+                      className="bg-white px-5 py-4 font-semibold text-ink"
+                    >
+                      {label}
+                    </th>
+                    <td className="bg-gray-light/60 px-5 py-4 text-muted-foreground">
+                      {today}
+                    </td>
+                    <td className="bg-white px-5 py-4 text-ink">
+                      <span className="flex gap-2">
+                        <Check
+                          className="mt-0.5 size-4 shrink-0 text-brand-red"
+                          aria-hidden="true"
+                        />
+                        {slicelive}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            &ldquo;Today&rdquo; describes enterprise, sales-led buying in
+            general terms. It doesn&apos;t describe any specific contract.
+          </p>
+        </Container>
+      </section>
+
       {/* Scenarios */}
       <section
-        className="bg-gray-light py-20"
+        className="border-y border-gray-mid bg-gray-light py-20"
         aria-labelledby="scenarios-heading"
       >
         <Container>
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold text-brand-red">
-              Who it&apos;s for
-            </p>
-            <h2
-              id="scenarios-heading"
-              className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-ink sm:text-4xl"
-            >
-              When the crowd shows up, the network still works.
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Shared networks slow down when everyone is on them at once. A
-              slice gives one customer reserved capacity that the crowd
-              can&apos;t use up.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
+          <SectionIntro
+            id="scenarios-heading"
+            eyebrow="Who it's for"
+            title="When the crowd shows up, the network still works."
+            body="Shared networks slow down when everyone is on them at once. A slice reserves capacity for one customer that the crowd can't use up."
+          />
+          <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             {SCENARIOS.map((s) => {
               const uc = USE_CASES[s.useCase]
+              const Icon = USE_CASE_ICONS[s.useCase]
               const q = quoteBooking({
                 venueId: s.venueId,
                 dateISO: SAMPLE_DATE,
@@ -313,9 +441,14 @@ export default function Home() {
                   key={s.useCase}
                   className="flex flex-col rounded-lg border border-gray-mid bg-white p-6 shadow-card transition-shadow duration-200 hover:shadow-raised"
                 >
-                  <span className="flex size-11 items-center justify-center rounded-lg bg-ink text-white">
-                    <s.icon className="size-5" aria-hidden="true" />
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="flex size-11 items-center justify-center rounded-lg bg-ink text-white">
+                      <Icon className="size-5" aria-hidden="true" />
+                    </span>
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      Illustrative scenario
+                    </span>
+                  </div>
                   <p className="mt-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                     {uc.label}
                   </p>
@@ -323,7 +456,10 @@ export default function Home() {
                   <p className="mt-3 text-sm text-muted-foreground">
                     {s.problem}
                   </p>
-                  <dl className="tabular mt-5 grid grid-cols-3 gap-2 rounded-lg bg-gray-light p-3 text-center">
+                  <p className="mt-5 text-xs font-semibold text-ink">
+                    {PACKAGES[uc.packageId].name} package
+                  </p>
+                  <dl className="tabular mt-2 grid grid-cols-3 gap-2 rounded-lg bg-gray-light p-3 text-center">
                     <div>
                       <dt className="text-[11px] text-muted-foreground">
                         Throughput
@@ -361,11 +497,20 @@ export default function Home() {
                     <span className="tabular font-semibold text-ink">
                       {formatUSD(q.total)}
                     </span>{" "}
-                    for {uc.typicalHours} hours on a Saturday
+                    for {uc.typicalHours} hours on a Saturday (simulated)
                   </p>
                 </article>
               )
             })}
+          </div>
+          <div className="mt-8">
+            <Link
+              href="/catalog"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Browse the slice catalog
+              <ArrowRight />
+            </Link>
           </div>
         </Container>
       </section>
@@ -374,17 +519,11 @@ export default function Home() {
       <section className="py-20" aria-labelledby="how-heading">
         <Container>
           <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
-            <div className="max-w-2xl">
-              <p className="text-sm font-semibold text-brand-red">
-                How it works
-              </p>
-              <h2
-                id="how-heading"
-                className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-ink sm:text-4xl"
-              >
-                Self-serve, like booking a room.
-              </h2>
-            </div>
+            <SectionIntro
+              id="how-heading"
+              eyebrow="How it works"
+              title="Self-serve, like booking a room."
+            />
             <Link
               href="/book"
               className={buttonVariants({ variant: "outline" })}
@@ -392,7 +531,7 @@ export default function Home() {
               Try the booking flow
             </Link>
           </div>
-          <ol className="mt-12 grid gap-px overflow-hidden rounded-lg border border-gray-mid bg-gray-mid sm:grid-cols-2 lg:grid-cols-4">
+          <ol className="mt-12 grid gap-px overflow-hidden rounded-lg border border-gray-mid bg-gray-mid sm:grid-cols-2 lg:grid-cols-5">
             {STEPS.map((step, i) => (
               <li key={step.title} className="bg-white p-6">
                 <div className="flex items-center justify-between">
@@ -419,39 +558,40 @@ export default function Home() {
         aria-labelledby="value-heading"
       >
         <Container>
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold text-brand-red">
-              Why it matters
-            </p>
-            <h2
-              id="value-heading"
-              className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-ink sm:text-4xl"
-            >
-              A new product built on capacity the network already has.
-            </h2>
-          </div>
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
+          <SectionIntro
+            id="value-heading"
+            eyebrow="Why it matters"
+            title="A new product line built on the slicing portfolio that already exists."
+          />
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
                 icon: TrendingUp,
                 metric: formatUSDCompact(business.annualRevenue),
-                metricLabel: `projected year-one revenue, ${DEFAULT_ASSUMPTIONS.numberOfSites} sites`,
+                metricLabel: `simulated year-one revenue, ${DEFAULT_ASSUMPTIONS.numberOfSites} sites`,
                 title: "New revenue",
-                body: "Hourly slices give the network a new product to sell to campus events, creators, and small businesses.",
+                body: "Hourly slices open a new segment: campus events, creators, and small businesses.",
               },
               {
                 icon: Gauge,
-                metric: `+${business.utilizationLiftPts.toFixed(1)} pts`,
-                metricLabel: `average cell utilization (${formatPct(business.utilizationLiftPct, 1)} relative)`,
-                title: "Better off-peak utilization",
-                body: "Demand pricing moves flexible bookings into daytime and late-evening valleys instead of the evening peak.",
+                metric: `+${business.nonPeakLiftPts.toFixed(1)} pts`,
+                metricLabel: "simulated off-peak cell utilization",
+                title: "Off-peak utilization",
+                body: "Discounted off-peak hours fill daytime and late-evening capacity that would otherwise sit idle.",
               },
               {
                 icon: RadioTower,
                 metric: "SA 5G",
                 metricLabel: "standalone core with end-to-end slicing",
-                title: "Shows what standalone 5G can do",
-                body: "Customers can see and buy network slicing directly, with a guarantee they can check.",
+                title: "Portfolio showcase",
+                body: "Puts network slicing in front of customers who've never seen it, with a guarantee they can check.",
+              },
+              {
+                icon: CalendarClock,
+                metric: formatInt(upgradeLeads),
+                metricLabel: "simulated enterprise upgrade leads per year",
+                title: "Upgrade pipeline",
+                body: "Repeat bookers are qualified leads for the enterprise slicing portfolio.",
               },
             ].map((v) => (
               <div
@@ -459,7 +599,14 @@ export default function Home() {
                 className="rounded-lg border border-gray-mid bg-white p-6 shadow-card"
               >
                 <v.icon className="size-6 text-ink" aria-hidden="true" />
-                <p className="tabular mt-6 text-4xl font-extrabold tracking-[-0.03em] text-brand-red">
+                <p
+                  className={cn(
+                    "tabular mt-6 text-4xl font-extrabold tracking-[-0.03em]",
+                    v.title === "Portfolio showcase"
+                      ? "text-ink"
+                      : "text-brand-red"
+                  )}
+                >
                   {v.metric}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -471,7 +618,7 @@ export default function Home() {
             ))}
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
-            Figures come from the simulated business model using its default
+            All figures are simulated from the business model&apos;s default
             assumptions.{" "}
             <Link
               href="/business"
@@ -491,7 +638,7 @@ export default function Home() {
               Watch the guarantee hold during a crowd surge.
             </h2>
             <p className="mt-3 text-lg text-[#c9cbcb]">
-              A 30-second simulation of a packed stadium, standard network vs.
+              A 30-second simulation of a packed venue, standard network vs.
               slice.
             </p>
           </div>
@@ -499,7 +646,7 @@ export default function Home() {
             href="/demo"
             className={cn(buttonVariants({ size: "lg" }), "shrink-0")}
           >
-            View live demo
+            See the live demo
             <ArrowRight />
           </Link>
         </Container>

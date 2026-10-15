@@ -7,8 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 export function BookingFlowSkeleton() {
   return (
     <div role="status" aria-label="Loading booking form">
-      <div className="grid grid-cols-3 gap-4">
-        {[0, 1, 2].map((i) => (
+      <div className="grid grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => (
           <Skeleton key={i} className="h-12" />
         ))}
       </div>

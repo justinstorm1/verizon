@@ -13,11 +13,14 @@ export function CapacityBar({
   quote,
   venueName,
   onFitThroughput,
+  alternateTime,
 }: {
   quote: Quote
   venueName: string
   /** Offered when the booking is oversold and a smaller slice would fit */
   onFitThroughput?: (mbps: number) => void
+  /** Nearest time window that fits, offered when the booking is oversold */
+  alternateTime?: { label: string; apply: () => void } | null
 }) {
   const existing = Math.min(quote.peakExisting, 1)
   const yours = Math.max(0, Math.min(quote.requestShare, 1 - existing))
@@ -28,7 +31,7 @@ export function CapacityBar({
     <div>
       <div className="flex items-baseline justify-between gap-4">
         <p className="text-sm font-semibold text-ink" id="capacity-label">
-          Cell capacity reserved:{" "}
+          Site capacity reserved:{" "}
           <span
             className={cn(
               "tabular",
@@ -49,7 +52,7 @@ export function CapacityBar({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(total * 100)}
-        aria-valuetext={`${formatPct(total)} of ${venueName} slice capacity reserved at the busiest hour, including this booking. Limit is ${formatPct(limit)}.`}
+        aria-valuetext={`${formatPct(total)} of ${venueName} site capacity reserved at the busiest hour, including this booking. Limit is ${formatPct(limit)}.`}
       >
         <div className="flex h-full">
           <div
@@ -105,19 +108,30 @@ export function CapacityBar({
             <p>
               Booking blocked: this would oversell {venueName} at its busiest
               hour.{" "}
-              {quote.maxThroughputMbps >= 5
-                ? `Lower throughput to ${quote.maxThroughputMbps} Mbps or less, or choose a different time.`
-                : "Choose a different time or venue."}
+              {alternateTime
+                ? `The nearest window with room is ${alternateTime.label}.`
+                : "No other window that day has room for this slice."}
             </p>
-            {onFitThroughput && quote.maxThroughputMbps >= 5 ? (
-              <button
-                type="button"
-                onClick={() => onFitThroughput(quote.maxThroughputMbps)}
-                className="mt-2 font-semibold text-danger underline underline-offset-4 hover:text-ink"
-              >
-                Lower to {quote.maxThroughputMbps} Mbps
-              </button>
-            ) : null}
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+              {alternateTime ? (
+                <button
+                  type="button"
+                  onClick={alternateTime.apply}
+                  className="font-semibold text-danger underline underline-offset-4 hover:text-ink"
+                >
+                  Move to {alternateTime.label}
+                </button>
+              ) : null}
+              {onFitThroughput && quote.maxThroughputMbps >= 5 ? (
+                <button
+                  type="button"
+                  onClick={() => onFitThroughput(quote.maxThroughputMbps)}
+                  className="font-semibold text-danger underline underline-offset-4 hover:text-ink"
+                >
+                  Or lower to {quote.maxThroughputMbps} Mbps
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}

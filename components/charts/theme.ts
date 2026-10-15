@@ -9,11 +9,12 @@ export const CHART_COLORS = {
   surface: "#FFFFFF",
 } as const
 
-/** Categorical order for the four use cases (validated: red/black/gray steps + direct labels) */
+/** Categorical order for the five use cases (CVD-validated; always paired with direct labels) */
 export const CATEGORY_COLORS = [
   "#EE0000",
   "#000000",
   "#747676",
+  "#8C0000",
   "#B0B3B3",
 ] as const
 

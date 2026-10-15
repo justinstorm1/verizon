@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   ReferenceArea,
@@ -26,6 +27,7 @@ import {
 import { PRICING } from "@/lib/config"
 import { formatInt, formatPct, formatUSD, formatUSDCompact } from "@/lib/format"
 import type {
+  FunnelStage,
   MonthProjection,
   UseCaseRevenue,
   UtilizationPoint,
@@ -333,6 +335,104 @@ export function UtilizationChart({ data }: { data: UtilizationPoint[] }) {
             activeDot={{ r: 4, stroke: CHART_COLORS.surface, strokeWidth: 2 }}
           />
         </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Customer funnel: first booking to enterprise upgrade
+// ---------------------------------------------------------------------------
+
+export function FunnelChart({ data }: { data: FunnelStage[] }) {
+  const summary = `Horizontal bar chart of the simulated customer funnel: ${data
+    .map((d) => `${d.stage} ${formatInt(d.customers)}`)
+    .join(", ")} customers per year.`
+
+  return (
+    <div className="h-[260px] w-full" role="img" aria-label={summary}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 4, right: 56, bottom: 20, left: 8 }}
+          barCategoryGap="24%"
+        >
+          <CartesianGrid horizontal={false} stroke={CHART_COLORS.grid} />
+          <XAxis
+            type="number"
+            tick={AXIS_TICK}
+            tickLine={false}
+            axisLine={{ stroke: CHART_COLORS.standardLight }}
+            tickFormatter={(v: number) => formatInt(v)}
+            label={{
+              value: "Customers per year",
+              position: "insideBottom",
+              offset: -12,
+              style: AXIS_LABEL_STYLE,
+            }}
+          />
+          <YAxis
+            type="category"
+            dataKey="stage"
+            tick={{ ...AXIS_TICK, fill: CHART_COLORS.ink }}
+            tickLine={false}
+            axisLine={false}
+            width={150}
+          />
+          <Tooltip
+            cursor={{ fill: CHART_COLORS.ink, fillOpacity: 0.04 }}
+            content={({ active, payload }) => {
+              const d = payload?.[0]?.payload as FunnelStage | undefined
+              if (!active || !d) return null
+              const i = data.findIndex((x) => x.stage === d.stage)
+              const prev = i > 0 ? data[i - 1].customers : null
+              return (
+                <ChartTooltip
+                  title={d.stage}
+                  rows={[
+                    {
+                      label: "Customers",
+                      value: formatInt(d.customers),
+                      emphasis: true,
+                    },
+                    ...(prev
+                      ? [
+                          {
+                            label: "From previous stage",
+                            value: formatPct(d.customers / prev),
+                          },
+                        ]
+                      : []),
+                    { label: "Meaning", value: d.description },
+                  ]}
+                />
+              )
+            }}
+          />
+          <Bar
+            dataKey="customers"
+            name="Customers"
+            radius={[0, 4, 4, 0]}
+            maxBarSize={32}
+            animationDuration={400}
+          >
+            {data.map((d, i) => (
+              <Cell
+                key={d.stage}
+                fill={
+                  i === data.length - 1 ? CHART_COLORS.slice : CHART_COLORS.ink
+                }
+              />
+            ))}
+            <LabelList
+              dataKey="customers"
+              position="right"
+              formatter={(v) => formatInt(Number(v))}
+              style={{ fill: CHART_COLORS.ink, fontSize: 12, fontWeight: 600 }}
+            />
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   )
