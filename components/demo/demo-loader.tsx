@@ -26,3 +26,8 @@ export const DemoLoader = dynamic(
   () => import("./demo-dashboard").then((m) => m.DemoDashboard),
   { ssr: false, loading: () => <DemoSkeleton /> }
 )
+
+export const DensityLoader = dynamic(
+  () => import("./density-explorer").then((m) => m.DensityExplorer),
+  { ssr: false, loading: () => <ChartSkeleton height={300} /> }
+)

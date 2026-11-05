@@ -1,157 +1,118 @@
 import {
   ArrowRight,
   BadgeCheck,
-  CalendarClock,
+  Ban,
   Check,
-  CircleDollarSign,
+  Clock,
   Gauge,
-  LayoutGrid,
-  LineChart,
+  Layers,
+  ListChecks,
   RadioTower,
+  Repeat,
+  Scale,
   ShieldCheck,
   TrendingUp,
+  UserPlus,
   Zap,
 } from "lucide-react"
 import Link from "next/link"
 
 import { Container } from "@/components/layout/container"
+import { PLAN_ICONS } from "@/components/plan-icon"
 import { SliceBadge } from "@/components/slice-badge"
 import { buttonVariants } from "@/components/ui/button"
-import { USE_CASE_ICONS } from "@/components/use-case-icon"
 import {
+  CAPACITY,
   DEFAULT_ASSUMPTIONS,
-  DEMO,
-  PACKAGES,
-  PRICING,
-  USE_CASES,
-  type UseCaseId,
+  PLAN_ORDER,
+  PLANS,
+  type PlanId,
 } from "@/lib/config"
-import { formatInt, formatUSD, formatUSDCompact } from "@/lib/format"
-import {
-  getVenue,
-  hourLabel,
-  projectBusiness,
-  quoteBooking,
-} from "@/lib/simulate"
+import { formatInt, formatPct, formatUSD, formatUSDCompact } from "@/lib/format"
+import { boostProfile, projectBusiness, segmentPoolMbps } from "@/lib/simulate"
 import { cn } from "@/lib/utils"
 
-/** A fixed Saturday keeps landing-page quotes stable between renders. */
-const SAMPLE_DATE = "2026-10-17"
-
-const SCENARIOS: {
-  useCase: UseCaseId
-  title: string
-  problem: string
-  outcome: string
-  venueId: string
-  startHour: number
-}[] = [
-  {
-    useCase: "livestream",
-    title: "Homecoming livestream",
-    problem:
-      "At kickoff, thousands of fans start posting video, and the student media crew's uplink stalls.",
-    outcome:
-      "The broadcast holds full quality from kickoff to the final whistle.",
-    venueId: "campus-green",
-    startHour: 13,
+const SCENARIOS: Record<PlanId, { title: string; story: string }> = {
+  individual: {
+    title: "A student on game day",
+    story:
+      "Jordan's phone is useless in the packed stadium. With a boost, video calls and mobile tickets work like the stands are empty.",
   },
-  {
-    useCase: "food-trucks",
-    title: "Food truck row at lunch",
-    problem:
-      "When the quad fills at noon, card readers on the shared network time out and lines stall.",
-    outcome: "Every vendor keeps taking payments through the lunch peak.",
-    venueId: "food-truck-row",
-    startHour: 10,
+  family: {
+    title: "A family at move-in",
+    story:
+      "Five phones, one crowded weekend. Shared boost hours keep everyone reachable while they haul boxes across campus.",
   },
-  {
-    useCase: "esports",
-    title: "Hackathon and esports finals",
-    problem:
-      "Lag spikes decide matches, and live demos freeze in front of the judges.",
-    outcome: "Finals run at a steady 20 ms, so the best team wins.",
-    venueId: "esports-arena",
-    startHour: 12,
+  "small-business": {
+    title: "A food truck at lunch",
+    story:
+      "When the quad fills at noon, card readers on the regular network time out. A small, very reliable slice keeps every sale going through.",
   },
-  {
-    useCase: "popup-retail",
-    title: "Weekend makers market",
-    problem:
-      "Student sellers take cards and mobile orders in a crowded atrium, and checkout keeps failing.",
-    outcome: "A small, very reliable slice keeps every sale going through.",
-    venueId: "innovation-hall",
-    startHour: 10,
+  organization: {
+    title: "Campus media and esports",
+    story:
+      "Streams and tournament play need low, steady latency. The Organization plan boosts at 100 Mbps and 20 ms when it matters.",
   },
-]
+}
 
 const GAP_ROWS: [string, string, string][] = [
   [
-    "Who it's built for",
+    "Who can buy",
     "Large organizations with an account team",
-    "Small businesses, student orgs, and event organizers",
+    "Individuals, families, small businesses, and organizations",
   ],
   [
     "How you buy",
     "Sales conversation and a custom quote",
-    "Self-serve storefront with an instant quote",
+    "Pick a plan online in minutes",
   ],
-  ["Commitment", "Longer-term agreements", "By the hour"],
+  ["Commitment", "Longer-term agreements", "Monthly, cancel any time"],
   [
-    "Time to set up",
-    "Planned with the account team",
-    "Scheduled online in minutes",
+    "Getting more",
+    "Renegotiate the contract",
+    "Upgrade for more speed or more time",
   ],
-  ["Pricing", "Negotiated per customer", "Published, with off-peak discounts"],
+  ["Pricing", "Negotiated per customer", "Published plans from $12 a month"],
   [
     "Proof it worked",
     "Reports through the account team",
-    "Live SLA dashboard for every booking",
+    "Live guarantee status on every boost",
   ],
 ]
 
 const STEPS = [
   {
-    icon: LayoutGrid,
-    title: "Choose",
-    body: "Pick a venue, a time window, and a package that fits your event.",
+    icon: UserPlus,
+    title: "Subscribe",
+    body: "Pick a plan for yourself, your family, your business, or your organization.",
   },
   {
     icon: BadgeCheck,
     title: "Check eligibility",
-    body: "We confirm standalone 5G coverage at the site and that your devices can join a slice.",
+    body: "We confirm standalone 5G coverage where you'll use it and that your devices can join.",
   },
   {
-    icon: CircleDollarSign,
-    title: "Price",
-    body: "Get an instant, demand-based quote. We never oversell the site's capacity.",
+    icon: RadioTower,
+    title: "Everyday priority",
+    body: "Your traffic goes ahead of regular traffic all month.",
   },
   {
     icon: Zap,
-    title: "Activate",
-    body: "The slice is scheduled and switches on before your event starts.",
+    title: "Boost when it matters",
+    body: "Start a boost for a full speed and latency guarantee, using your monthly hours.",
   },
   {
-    icon: LineChart,
-    title: "Prove",
-    body: "Watch latency and throughput against the guarantee live, then get a report.",
+    icon: TrendingUp,
+    title: "Upgrade",
+    body: "Running low or need more? Add hours or move to a faster tier any time.",
   },
 ]
 
 function HeroPreview() {
-  const uc = USE_CASES.livestream
-  const pkg = PACKAGES[uc.packageId]
-  const quote = quoteBooking({
-    venueId: "campus-green",
-    dateISO: SAMPLE_DATE,
-    startHour: 18,
-    durationHours: 4,
-    useCase: "livestream",
-    profile: uc.recommended,
-  })
-  const venue = getVenue("campus-green")
+  const plan = PLANS.organization
+  const boost = boostProfile("organization", "fast")
   const standardMs = 162
-  const sliceMs = 24
+  const boostMs = 14
 
   return (
     <div className="relative">
@@ -161,26 +122,38 @@ function HeroPreview() {
       />
       <figure
         className="rounded-xl border border-gray-mid bg-white p-6 shadow-raised"
-        aria-label="Example booking preview with simulated values"
+        aria-label="Example account preview with simulated values"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Booking preview · {pkg.name}
+              Account preview
             </p>
-            <p className="mt-1 text-lg font-bold text-ink">{venue.name}</p>
+            <p className="mt-1 text-lg font-bold text-ink">Esports Club</p>
             <p className="text-sm text-muted-foreground">
-              Saturday · {hourLabel(18)} to {hourLabel(22)}
+              {plan.name} plan · Fast speed
             </p>
           </div>
-          <SliceBadge status="met" />
+          <SliceBadge status="boosting" />
+        </div>
+
+        <div className="mt-6">
+          <div className="flex items-baseline justify-between text-sm">
+            <span className="font-semibold text-ink">Boost hours left</span>
+            <span className="tabular font-semibold text-ink">
+              42 of {plan.boostHours} h
+            </span>
+          </div>
+          <div className="mt-2 h-2 rounded-full bg-gray-light">
+            <div className="h-2 rounded-full bg-ink" style={{ width: "70%" }} />
+          </div>
         </div>
 
         <dl className="mt-6 grid grid-cols-3 divide-x divide-gray-mid rounded-lg border border-gray-mid">
           {[
-            ["Throughput", `${uc.recommended.throughputMbps}`, "Mbps"],
-            ["Max latency", `${uc.recommended.maxLatencyMs}`, "ms"],
-            ["Reliability", `${uc.recommended.reliability}`, "%"],
+            ["Boost speed", `${boost.throughputMbps}`, "Mbps"],
+            ["Max latency", `${boost.maxLatencyMs}`, "ms"],
+            ["Reliability", `${boost.reliability}`, "%"],
           ].map(([label, value, unit]) => (
             <div key={label} className="px-3 py-3 sm:px-4">
               <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -196,7 +169,7 @@ function HeroPreview() {
 
         <div className="mt-6">
           <p className="text-sm font-semibold text-ink">
-            Latency during a crowd surge{" "}
+            Latency in a packed arena{" "}
             <span className="font-normal text-muted-foreground">
               (simulated)
             </span>
@@ -204,7 +177,7 @@ function HeroPreview() {
           <div className="mt-3 space-y-3 text-sm">
             <div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Standard network</span>
+                <span className="text-muted-foreground">Regular network</span>
                 <span className="tabular font-semibold text-ink">
                   {standardMs} ms
                 </span>
@@ -218,34 +191,25 @@ function HeroPreview() {
             </div>
             <div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Your slice</span>
+                <span className="text-muted-foreground">Your boost</span>
                 <span className="tabular font-semibold text-brand-red">
-                  {sliceMs} ms
+                  {boostMs} ms
                 </span>
               </div>
               <div className="mt-1 h-2 rounded-full bg-gray-light">
                 <div
                   className="h-2 rounded-full bg-brand-red"
-                  style={{ width: `${(sliceMs / 180) * 100}%` }}
+                  style={{ width: `${(boostMs / 180) * 100}%` }}
                 />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-6 flex items-end justify-between border-t border-gray-mid pt-4">
-          <div>
-            <p className="text-xs text-muted-foreground">
-              Quoted total, 4 hours
-            </p>
-            <p className="tabular text-2xl font-extrabold text-ink">
-              {formatUSD(quote.total)}
-            </p>
-          </div>
+        <div className="mt-6 flex items-center justify-between border-t border-gray-mid pt-4">
+          <SliceBadge status="met" />
           <p className="text-right text-xs text-muted-foreground">
-            Peak-hour pricing
-            <br />
-            Simulated quote
+            Simulated account
           </p>
         </div>
       </figure>
@@ -282,9 +246,12 @@ function SectionIntro({
 
 export default function Home() {
   const business = projectBusiness(DEFAULT_ASSUMPTIONS)
-  const offPeakRate =
-    PRICING.baseHourlyRate * PRICING.demandBands["off-peak"].multiplier
-  const upgradeLeads = business.funnel[business.funnel.length - 1].customers
+  const upgradeShare = business.revenueMix
+    .filter((r) => r.id !== "base")
+    .reduce((s, r) => s + r.share, 0)
+  const enterpriseLeads = business.funnel[business.funnel.length - 1].customers
+  const cap = CAPACITY.guaranteedPoolCap
+  const examplePool = segmentPoolMbps(3000, "organization")
 
   return (
     <>
@@ -297,20 +264,20 @@ export default function Home() {
                 className="size-1.5 rounded-full bg-brand-red"
                 aria-hidden="true"
               />
-              Self-serve 5G network slicing
+              NJIT Verizon Smart Campus Challenge · Concept
             </p>
             <h1 className="mt-6 text-5xl leading-[1.02] font-extrabold tracking-[-0.04em] text-balance text-ink sm:text-6xl lg:text-7xl">
-              Guaranteed 5G, booked in minutes.
+              Guaranteed 5G on campus, by subscription.
             </h1>
             <p className="mt-6 max-w-xl text-lg text-pretty text-muted-foreground sm:text-xl">
-              SliceLive is a self-serve storefront on top of Verizon&apos;s
-              network-slicing portfolio. Small businesses, student orgs, and
-              event organizers book a slice with guaranteed throughput and
-              latency by the hour, without a sales contract.
+              Priority 5G brings Verizon&apos;s network slicing to everyone on
+              campus. Individuals, families, small businesses, and organizations
+              get everyday priority plus monthly boost hours with a real speed
+              and latency guarantee, and can upgrade for more speed or time.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/book" className={buttonVariants({ size: "lg" })}>
-                Book a slice
+              <Link href="/plans" className={buttonVariants({ size: "lg" })}>
+                See plans
                 <ArrowRight />
               </Link>
               <Link
@@ -322,9 +289,9 @@ export default function Home() {
             </div>
             <dl className="mt-12 grid max-w-xl grid-cols-3 gap-6 border-t border-gray-mid pt-6">
               {[
-                [`≤${DEMO.slice.guaranteeLatencyMs} ms`, "latency guarantee"],
-                [`${formatUSD(offPeakRate)}/hr`, "off-peak starting rate"],
-                ["5 steps", "from choosing to proof"],
+                [`${formatUSD(PLANS.individual.price)}/mo`, "plans start at"],
+                ["4 plans", "for every kind of customer"],
+                [`${formatPct(cap)} cap`, "on guarantees per cell"],
               ].map(([value, label]) => (
                 <div key={label}>
                   <dt className="sr-only">{label}</dt>
@@ -340,7 +307,7 @@ export default function Home() {
               ))}
             </dl>
             <p className="mt-3 text-xs text-muted-foreground">
-              Illustrative profile and simulated pricing.
+              Illustrative plans and simulated values.
             </p>
           </div>
           <HeroPreview />
@@ -353,13 +320,14 @@ export default function Home() {
           <SectionIntro
             id="gap-heading"
             eyebrow="The gap"
-            title="Network slices exist. Small customers can't easily buy them."
-            body="Slicing is sold mainly through enterprise channels today. That works for large, long-term deployments, but not for a student org that needs guaranteed coverage for one Saturday."
+            title="Network slicing exists. Most people on campus can't buy it."
+            body="Slicing is sold mainly through enterprise channels today. That works for large, long-term deployments, but not for a student, a family, or a food truck."
           />
           <div className="mt-10 overflow-x-auto rounded-lg border border-gray-mid shadow-card">
             <table className="w-full min-w-[640px] text-left text-sm">
               <caption className="sr-only">
-                Comparison of enterprise-sales-led slicing today with SliceLive
+                Comparison of enterprise-sales-led slicing today with Priority
+                5G
               </caption>
               <thead>
                 <tr className="border-b border-gray-mid">
@@ -374,13 +342,13 @@ export default function Home() {
                     scope="col"
                     className="bg-ink px-5 py-4 text-base font-bold text-white"
                   >
-                    Slice<span className="text-brand-red">Live</span>:
-                    self-serve
+                    Priority <span className="text-brand-red">5G</span>:
+                    subscription
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-mid">
-                {GAP_ROWS.map(([label, today, slicelive]) => (
+                {GAP_ROWS.map(([label, today, ours]) => (
                   <tr key={label}>
                     <th
                       scope="row"
@@ -397,7 +365,7 @@ export default function Home() {
                           className="mt-0.5 size-4 shrink-0 text-brand-red"
                           aria-hidden="true"
                         />
-                        {slicelive}
+                        {ours}
                       </span>
                     </td>
                   </tr>
@@ -412,33 +380,26 @@ export default function Home() {
         </Container>
       </section>
 
-      {/* Scenarios */}
+      {/* Plans for everyone */}
       <section
         className="border-y border-gray-mid bg-gray-light py-20"
-        aria-labelledby="scenarios-heading"
+        aria-labelledby="who-heading"
       >
         <Container>
           <SectionIntro
-            id="scenarios-heading"
+            id="who-heading"
             eyebrow="Who it's for"
-            title="When the crowd shows up, the network still works."
-            body="Shared networks slow down when everyone is on them at once. A slice reserves capacity for one customer that the crowd can't use up."
+            title="One plan for each kind of customer."
+            body="Everyone shares the same campus network. Priority 5G lets each person or group pay for the reliability they actually need."
           />
-          <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {SCENARIOS.map((s) => {
-              const uc = USE_CASES[s.useCase]
-              const Icon = USE_CASE_ICONS[s.useCase]
-              const q = quoteBooking({
-                venueId: s.venueId,
-                dateISO: SAMPLE_DATE,
-                startHour: s.startHour,
-                durationHours: uc.typicalHours,
-                useCase: s.useCase,
-                profile: uc.recommended,
-              })
+          <ul className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {PLAN_ORDER.map((id) => {
+              const p = PLANS[id]
+              const Icon = PLAN_ICONS[id]
+              const s = SCENARIOS[id]
               return (
-                <article
-                  key={s.useCase}
+                <li
+                  key={id}
                   className="flex flex-col rounded-lg border border-gray-mid bg-white p-6 shadow-card transition-shadow duration-200 hover:shadow-raised"
                 >
                   <div className="flex items-center justify-between">
@@ -450,22 +411,19 @@ export default function Home() {
                     </span>
                   </div>
                   <p className="mt-5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                    {uc.label}
+                    {p.audience}
                   </p>
                   <h3 className="mt-1 text-xl font-bold text-ink">{s.title}</h3>
                   <p className="mt-3 text-sm text-muted-foreground">
-                    {s.problem}
+                    {s.story}
                   </p>
-                  <p className="mt-5 text-xs font-semibold text-ink">
-                    {PACKAGES[uc.packageId].name} package
-                  </p>
-                  <dl className="tabular mt-2 grid grid-cols-3 gap-2 rounded-lg bg-gray-light p-3 text-center">
+                  <dl className="tabular mt-5 grid grid-cols-3 gap-2 rounded-lg bg-gray-light p-3 text-center">
                     <div>
                       <dt className="text-[11px] text-muted-foreground">
-                        Throughput
+                        Boost
                       </dt>
                       <dd className="text-sm font-bold">
-                        {uc.recommended.throughputMbps} Mbps
+                        {p.boost.throughputMbps} Mbps
                       </dd>
                     </div>
                     <div>
@@ -473,45 +431,35 @@ export default function Home() {
                         Latency
                       </dt>
                       <dd className="text-sm font-bold">
-                        ≤{uc.recommended.maxLatencyMs} ms
+                        ≤{p.boost.maxLatencyMs} ms
                       </dd>
                     </div>
                     <div>
                       <dt className="text-[11px] text-muted-foreground">
-                        Reliability
+                        Hours
                       </dt>
-                      <dd className="text-sm font-bold">
-                        {uc.recommended.reliability}%
-                      </dd>
+                      <dd className="text-sm font-bold">{p.boostHours}/mo</dd>
                     </div>
                   </dl>
-                  <p className="mt-5 flex gap-2 text-sm font-medium text-ink">
-                    <ShieldCheck
-                      className="mt-0.5 size-4 shrink-0 text-brand-red"
-                      aria-hidden="true"
-                    />
-                    {s.outcome}
-                  </p>
-                  <p className="mt-auto pt-5 text-sm text-muted-foreground">
-                    About{" "}
-                    <span className="tabular font-semibold text-ink">
-                      {formatUSD(q.total)}
-                    </span>{" "}
-                    for {uc.typicalHours} hours on a Saturday (simulated)
-                  </p>
-                </article>
+                  <div className="mt-auto flex items-center justify-between gap-3 pt-6">
+                    <p className="text-sm text-muted-foreground">
+                      <span className="tabular text-lg font-bold text-ink">
+                        {formatUSD(p.price)}
+                      </span>
+                      /month
+                    </p>
+                    <Link
+                      href={`/subscribe?plan=${id}`}
+                      className="text-sm font-semibold text-ink underline underline-offset-4 hover:text-brand-red"
+                      aria-label={`Subscribe to the ${p.name} plan`}
+                    >
+                      Subscribe
+                    </Link>
+                  </div>
+                </li>
               )
             })}
-          </div>
-          <div className="mt-8">
-            <Link
-              href="/catalog"
-              className={buttonVariants({ variant: "outline" })}
-            >
-              Browse the slice catalog
-              <ArrowRight />
-            </Link>
-          </div>
+          </ul>
         </Container>
       </section>
 
@@ -522,13 +470,13 @@ export default function Home() {
             <SectionIntro
               id="how-heading"
               eyebrow="How it works"
-              title="Self-serve, like booking a room."
+              title="Like a phone plan, with a guarantee."
             />
             <Link
-              href="/book"
+              href="/subscribe"
               className={buttonVariants({ variant: "outline" })}
             >
-              Try the booking flow
+              Try signing up
             </Link>
           </div>
           <ol className="mt-12 grid gap-px overflow-hidden rounded-lg border border-gray-mid bg-gray-mid sm:grid-cols-2 lg:grid-cols-5">
@@ -552,46 +500,137 @@ export default function Home() {
         </Container>
       </section>
 
-      {/* Business value */}
+      {/* Why not give everyone a slice? */}
       <section
-        className="border-t border-gray-mid bg-gray-light py-20"
-        aria-labelledby="value-heading"
+        className="border-t border-gray-mid bg-ink py-20 text-white"
+        aria-labelledby="fair-heading"
       >
+        <Container>
+          <div className="max-w-2xl">
+            <p className="text-sm font-semibold text-brand-red">
+              The obvious question
+            </p>
+            <h2
+              id="fair-heading"
+              className="mt-2 text-3xl font-extrabold tracking-[-0.03em] text-balance sm:text-4xl"
+            >
+              If everyone gets a slice, isn&apos;t it just normal 5G?
+            </h2>
+            <p className="mt-4 text-lg text-[#c9cbcb]">
+              It would be, if nothing limited it. Priority only means something
+              when it&apos;s scarce, so Priority 5G is built around four rules.
+            </p>
+          </div>
+          <ol className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                icon: Scale,
+                title: "Guarantees are capped",
+                body: `Each cell gives guarantees at most ${formatPct(cap)} of its capacity. Regular users always keep the other ${formatPct(1 - cap)}.`,
+              },
+              {
+                icon: ListChecks,
+                title: "Seats are limited",
+                body: "Each plan type gets its own share of that pool. When a share is full on a cell, new sign-ups join a waitlist.",
+              },
+              {
+                icon: Clock,
+                title: "Guarantees are time-boxed",
+                body: "Day to day you get priority. The full guarantee runs only during boost hours, so only a few subscribers boost at once.",
+              },
+              {
+                icon: Ban,
+                title: "No silent slowdowns",
+                body: "If a boost won't fit, it's refused with the next open time. It never starts and then runs slowly.",
+              },
+            ].map((r, i) => (
+              <li
+                key={r.title}
+                className="rounded-lg border border-white/15 bg-white/5 p-6"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="tabular text-sm font-bold text-brand-red">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <r.icon className="size-5 text-white" aria-hidden="true" />
+                </div>
+                <h3 className="mt-6 text-lg font-bold">{r.title}</h3>
+                <p className="mt-2 text-sm text-[#c9cbcb]">{r.body}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-10 flex flex-col gap-6 rounded-lg border border-white/15 p-6 md:flex-row md:items-center md:justify-between">
+            <p className="max-w-3xl text-sm text-[#c9cbcb]">
+              <span className="font-semibold text-white">
+                Example (illustrative):
+              </span>{" "}
+              a 3,000 Mbps campus cell reserves {formatInt(3000 * cap)} Mbps for
+              guarantees. Organizations get {formatInt(examplePool)} Mbps of
+              that, enough for about{" "}
+              {Math.floor(
+                examplePool / PLANS.organization.boost.throughputMbps
+              )}{" "}
+              Organization boosts at once. If about 1 in 10 boosts at the same
+              time, that cell can sell about{" "}
+              {Math.floor(
+                examplePool /
+                  (PLANS.organization.boost.throughputMbps *
+                    PLANS.organization.peakConcurrency)
+              )}{" "}
+              Organization plans before the waitlist opens.
+            </p>
+            <Link
+              href="/demo#density"
+              className={cn(buttonVariants(), "shrink-0")}
+            >
+              See it in the demo
+              <ArrowRight />
+            </Link>
+          </div>
+        </Container>
+      </section>
+
+      {/* Business value */}
+      <section className="bg-gray-light py-20" aria-labelledby="value-heading">
         <Container>
           <SectionIntro
             id="value-heading"
             eyebrow="Why it matters"
-            title="A new product line built on the slicing portfolio that already exists."
+            title="Recurring revenue from the slicing portfolio that already exists."
           />
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
-                icon: TrendingUp,
-                metric: formatUSDCompact(business.annualRevenue),
+                icon: Repeat,
+                metric: formatUSDCompact(business.yearOneRevenue),
                 metricLabel: `simulated year-one revenue, ${DEFAULT_ASSUMPTIONS.numberOfSites} sites`,
-                title: "New revenue",
-                body: "Hourly slices open a new segment: campus events, creators, and small businesses.",
+                title: "Recurring revenue",
+                body: "Monthly plans across four customer types instead of one-off enterprise deals.",
+                accent: true,
               },
               {
                 icon: Gauge,
-                metric: `+${business.nonPeakLiftPts.toFixed(1)} pts`,
-                metricLabel: "simulated off-peak cell utilization",
-                title: "Off-peak utilization",
-                body: "Discounted off-peak hours fill daytime and late-evening capacity that would otherwise sit idle.",
+                metric: formatPct(upgradeShare),
+                metricLabel: "simulated share of revenue from upgrades",
+                title: "Upgrade revenue",
+                body: "Speed tiers and extra boost hours grow revenue per subscriber over time.",
+                accent: true,
               },
               {
-                icon: RadioTower,
-                metric: "SA 5G",
-                metricLabel: "standalone core with end-to-end slicing",
-                title: "Portfolio showcase",
-                body: "Puts network slicing in front of customers who've never seen it, with a guarantee they can check.",
+                icon: ShieldCheck,
+                metric: formatPct(1 - cap),
+                metricLabel: "of every cell always kept for regular users",
+                title: "Fair by design",
+                body: "Caps and waitlists keep the guarantee real without squeezing out everyone else.",
+                accent: false,
               },
               {
-                icon: CalendarClock,
-                metric: formatInt(upgradeLeads),
-                metricLabel: "simulated enterprise upgrade leads per year",
-                title: "Upgrade pipeline",
-                body: "Repeat bookers are qualified leads for the enterprise slicing portfolio.",
+                icon: Layers,
+                metric: formatInt(enterpriseLeads),
+                metricLabel: "simulated enterprise leads per year",
+                title: "Enterprise pipeline",
+                body: "Organizations and businesses that outgrow a plan are qualified leads for enterprise slicing.",
+                accent: true,
               },
             ].map((v) => (
               <div
@@ -602,9 +641,7 @@ export default function Home() {
                 <p
                   className={cn(
                     "tabular mt-6 text-4xl font-extrabold tracking-[-0.03em]",
-                    v.title === "Portfolio showcase"
-                      ? "text-ink"
-                      : "text-brand-red"
+                    v.accent ? "text-brand-red" : "text-ink"
                   )}
                 >
                   {v.metric}
@@ -618,7 +655,7 @@ export default function Home() {
             ))}
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
-            All figures are simulated from the business model&apos;s default
+            Figures are simulated from the business model&apos;s default
             assumptions.{" "}
             <Link
               href="/business"
@@ -631,15 +668,15 @@ export default function Home() {
       </section>
 
       {/* Closing CTA */}
-      <section className="bg-ink py-16 text-white">
+      <section className="border-t border-gray-mid bg-white py-16">
         <Container className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
           <div>
-            <h2 className="text-3xl font-extrabold tracking-[-0.03em] sm:text-4xl">
-              Watch the guarantee hold during a crowd surge.
+            <h2 className="text-3xl font-extrabold tracking-[-0.03em] text-ink sm:text-4xl">
+              Watch a boost hold during a crowd surge.
             </h2>
-            <p className="mt-3 text-lg text-[#c9cbcb]">
-              A 30-second simulation of a packed venue, standard network vs.
-              slice.
+            <p className="mt-3 text-lg text-muted-foreground">
+              A 30-second simulation of a packed venue, regular network vs. a
+              Priority 5G boost.
             </p>
           </div>
           <Link

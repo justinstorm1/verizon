@@ -1,20 +1,26 @@
-import { CircleCheck, CircleX, Clock, Radio } from "lucide-react"
+import { CircleCheck, CircleX, Clock, Radio, Zap } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-export type SliceStatus = "active" | "scheduled" | "met" | "breached"
+export type SliceStatus =
+  "boosting" | "priority" | "waitlisted" | "met" | "breached"
 
 const STYLES: Record<
   SliceStatus,
   { label: string; className: string; Icon: typeof Radio }
 > = {
-  active: {
-    label: "Active",
+  boosting: {
+    label: "Boosting",
     className: "border-brand-red/30 bg-[#fff1f1] text-brand-red-dark",
+    Icon: Zap,
+  },
+  priority: {
+    label: "Everyday priority",
+    className: "border-gray-mid bg-white text-ink",
     Icon: Radio,
   },
-  scheduled: {
-    label: "Scheduled",
+  waitlisted: {
+    label: "Waitlisted",
     className: "border-gray-mid bg-gray-light text-ink",
     Icon: Clock,
   },
@@ -30,7 +36,7 @@ const STYLES: Record<
   },
 }
 
-/** Status pill for a slice. Always icon + text, never color alone. */
+/** Status pill for a subscriber or guarantee. Always icon + text, never color alone. */
 export function SliceBadge({
   status,
   label,

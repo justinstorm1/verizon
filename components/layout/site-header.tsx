@@ -25,8 +25,8 @@ export function SiteHeader() {
       <Container className="flex h-16 items-center justify-between gap-6">
         <Wordmark />
 
-        <nav aria-label="Primary" className="hidden lg:block">
-          <ul className="flex items-center gap-0.5 xl:gap-1">
+        <nav aria-label="Primary" className="hidden xl:block">
+          <ul className="flex items-center gap-0.5">
             {NAV_ITEMS.map((item) => {
               const active = isActive(pathname, item.href)
               return (
@@ -35,7 +35,7 @@ export function SiteHeader() {
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "relative inline-flex h-16 items-center px-2.5 text-sm font-medium whitespace-nowrap transition-colors xl:px-3",
+                      "relative inline-flex h-16 items-center px-2.5 text-sm font-medium whitespace-nowrap transition-colors",
                       "after:absolute after:inset-x-2.5 after:bottom-0 after:h-[3px] after:rounded-t-sm after:transition-colors",
                       active
                         ? "text-ink after:bg-brand-red"
@@ -52,17 +52,17 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <Link
-            href="/book"
+            href="/plans"
             className={cn(
               buttonVariants({ size: "sm" }),
               "hidden sm:inline-flex"
             )}
           >
-            Book a slice
+            See plans
           </Link>
           <button
             type="button"
-            className="inline-flex size-10 items-center justify-center rounded-lg text-ink hover:bg-gray-light lg:hidden"
+            className="inline-flex size-10 items-center justify-center rounded-lg text-ink hover:bg-gray-light xl:hidden"
             aria-expanded={open}
             aria-controls="mobile-nav"
             aria-label={open ? "Close menu" : "Open menu"}
@@ -77,7 +77,7 @@ export function SiteHeader() {
         <nav
           id="mobile-nav"
           aria-label="Primary mobile"
-          className="animate-in border-t border-gray-mid bg-white duration-150 fade-in slide-in-from-top-1 lg:hidden"
+          className="animate-in border-t border-gray-mid bg-white duration-150 fade-in slide-in-from-top-1 xl:hidden"
         >
           <Container className="py-2">
             <ul>

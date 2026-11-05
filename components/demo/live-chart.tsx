@@ -149,7 +149,7 @@ export function LiveChart({
                     title={`${Math.round(p.t - tMax)}s · load ${Math.round(p.load * 100)}%`}
                     rows={[
                       {
-                        label: "Sliced connection",
+                        label: "Priority 5G boost",
                         value: `${p[sliceKey].toFixed(0)} ${unit}`,
                         color: CHART_COLORS.slice,
                         emphasis: true,
@@ -177,7 +177,7 @@ export function LiveChart({
             <Line
               type="monotone"
               dataKey={sliceKey}
-              name="Sliced connection"
+              name="Priority 5G boost"
               stroke={CHART_COLORS.slice}
               strokeWidth={2.5}
               dot={false}

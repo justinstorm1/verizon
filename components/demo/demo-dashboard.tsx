@@ -18,7 +18,7 @@ import { KpiCard } from "@/components/kpi-card"
 import { SliceBadge } from "@/components/slice-badge"
 import { Button } from "@/components/ui/button"
 import { useSurgeSimulation } from "@/hooks/use-surge-simulation"
-import { DEMO, USE_CASES } from "@/lib/config"
+import { DEMO, PLANS } from "@/lib/config"
 import { formatInt } from "@/lib/format"
 import {
   SURGE_TOTAL_SECONDS,
@@ -40,9 +40,9 @@ const PHASE_LABEL: Record<SurgePhase, string> = {
 }
 
 const LEGEND = [
-  { label: "Sliced connection", color: CHART_COLORS.slice },
+  { label: "Priority 5G boost", color: CHART_COLORS.slice },
   { label: "Standard network", color: CHART_COLORS.standard },
-  { label: "Slice guarantee", color: CHART_COLORS.ink, dashed: true },
+  { label: "Boost guarantee", color: CHART_COLORS.ink, dashed: true },
 ]
 
 export function DemoDashboard() {
@@ -136,7 +136,7 @@ export function DemoDashboard() {
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
       >
         <KpiCard
-          label="Latency (slice)"
+          label="Latency (boost)"
           value={Math.round(latest.sliceLatency)}
           unit="ms"
           accent
@@ -154,7 +154,7 @@ export function DemoDashboard() {
           }
         />
         <KpiCard
-          label="Throughput (slice)"
+          label="Throughput (boost)"
           value={Math.round(latest.sliceThroughput)}
           unit="Mbps"
           accent
@@ -169,7 +169,7 @@ export function DemoDashboard() {
           }
         />
         <KpiCard
-          label="Packet loss (slice)"
+          label="Packet loss (boost)"
           value={latest.sliceLoss.toFixed(2)}
           unit="%"
           accent
@@ -195,7 +195,7 @@ export function DemoDashboard() {
         >
           <div className="mt-3 flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2 text-xs">
-              <span className="text-muted-foreground">Slice</span>
+              <span className="text-muted-foreground">Boost</span>
               <SliceBadge status={sliceMet ? "met" : "breached"} />
             </div>
             <div className="flex items-center justify-between gap-2 text-xs">
@@ -208,7 +208,7 @@ export function DemoDashboard() {
           </div>
         </KpiCard>
         <KpiCard
-          label="Uptime (slice)"
+          label="Uptime (boost)"
           value={up.slice.toFixed(1)}
           unit="%"
           accent
@@ -240,7 +240,7 @@ export function DemoDashboard() {
           <LiveChartSlot
             kind="latency"
             state={state}
-            summary={`Latency over the last ${DEMO.windowSeconds} seconds. Sliced connection now ${Math.round(latest.sliceLatency)} ms, standard network ${Math.round(latest.standardLatency)} ms. Guarantee is ${DEMO.slice.guaranteeLatencyMs} ms.`}
+            summary={`Latency over the last ${DEMO.windowSeconds} seconds. Priority 5G boost now ${Math.round(latest.sliceLatency)} ms, standard network ${Math.round(latest.standardLatency)} ms. Guarantee is ${DEMO.slice.guaranteeLatencyMs} ms.`}
           />
         </ChartCard>
         <ChartCard
@@ -252,12 +252,12 @@ export function DemoDashboard() {
           <LiveChartSlot
             kind="throughput"
             state={state}
-            summary={`Throughput over the last ${DEMO.windowSeconds} seconds. Sliced connection now ${Math.round(latest.sliceThroughput)} Mbps, standard network ${Math.round(latest.standardThroughput)} Mbps. Guarantee is ${DEMO.slice.guaranteeThroughputMbps} Mbps.`}
+            summary={`Throughput over the last ${DEMO.windowSeconds} seconds. Priority 5G boost now ${Math.round(latest.sliceThroughput)} Mbps, standard network ${Math.round(latest.standardThroughput)} Mbps. Guarantee is ${DEMO.slice.guaranteeThroughputMbps} Mbps.`}
           />
         </ChartCard>
       </div>
 
-      {/* Active slices + summary */}
+      {/* Subscribers + summary */}
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         <section
           className="min-w-0 rounded-lg border border-gray-mid bg-white shadow-card"
@@ -265,7 +265,7 @@ export function DemoDashboard() {
         >
           <div className="flex items-center justify-between p-5 pb-3 sm:px-6">
             <h2 id="slices-heading" className="text-lg font-bold text-ink">
-              Active slices on campus
+              Subscribers on campus
             </h2>
             <span className="text-xs text-muted-foreground">
               Updates every {DEMO.tickMs / 1000}s
@@ -274,8 +274,8 @@ export function DemoDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-left text-sm">
               <caption className="sr-only">
-                Simulated slices currently running or scheduled, with live
-                latency against each slice&apos;s guarantee.
+                Simulated subscribers, whether each is boosting, on everyday
+                priority, or waitlisted, with live latency.
               </caption>
               <thead>
                 <tr className="border-y border-gray-mid bg-gray-light text-xs text-muted-foreground">
@@ -283,7 +283,7 @@ export function DemoDashboard() {
                     Customer
                   </th>
                   <th scope="col" className="px-3 py-2.5 font-semibold">
-                    Use case
+                    Plan
                   </th>
                   <th scope="col" className="px-3 py-2.5 font-semibold">
                     Status
@@ -292,32 +292,40 @@ export function DemoDashboard() {
                     scope="col"
                     className="px-5 py-2.5 text-right font-semibold sm:px-6"
                   >
-                    Latency / guarantee
+                    Latency
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-mid">
-                {state.slices.map((s) => (
+                {state.subscribers.map((s) => (
                   <tr key={s.id}>
                     <td className="px-5 py-3 sm:px-6">
                       <span className="block font-semibold text-ink">
-                        {s.customer}
+                        {s.name}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {s.id} · {s.venue}
+                        {s.id} · {s.cell}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-ink">
-                      {USE_CASES[s.useCase].short}
-                    </td>
+                    <td className="px-3 py-3 text-ink">{PLANS[s.plan].name}</td>
                     <td className="px-3 py-3">
                       <SliceBadge status={s.status} />
                     </td>
                     <td className="tabular px-5 py-3 text-right sm:px-6">
                       {s.latencyMs === null ? (
                         <span className="text-muted-foreground">
-                          Starts 8 PM
+                          Waiting for a seat
                         </span>
+                      ) : s.status === "boosting" ? (
+                        <>
+                          <span className="font-bold text-ink">
+                            {Math.round(s.latencyMs)} ms
+                          </span>
+                          <span className="text-muted-foreground">
+                            {" "}
+                            / ≤{s.guaranteeLatencyMs} ms guaranteed
+                          </span>
+                        </>
                       ) : (
                         <>
                           <span className="font-bold text-ink">
@@ -325,7 +333,7 @@ export function DemoDashboard() {
                           </span>
                           <span className="text-muted-foreground">
                             {" "}
-                            / ≤{s.guaranteeLatencyMs} ms
+                            · not boosting
                           </span>
                         </>
                       )}
@@ -411,9 +419,9 @@ function SurgeSummaryCard({ state }: { state: DemoState }) {
             The gray line climbs past 150 ms and throughput collapses.
           </li>
           <li>
-            <span className="font-semibold text-ink">3. The slice holds.</span>{" "}
-            Reserved radio and core resources keep the red line under its{" "}
-            {DEMO.slice.guaranteeLatencyMs} ms guarantee.
+            <span className="font-semibold text-ink">3. The boost holds.</span>{" "}
+            A subscriber&apos;s boost runs on reserved resources, so the red
+            line stays under its {DEMO.slice.guaranteeLatencyMs} ms guarantee.
           </li>
         </ol>
         <p className="mt-auto pt-6 text-xs text-muted-foreground">
@@ -435,7 +443,9 @@ function SurgeSummaryCard({ state }: { state: DemoState }) {
       </h2>
       <dl className="mt-4 grid grid-cols-2 gap-4">
         <div className="rounded-lg bg-[#fff1f1] p-4">
-          <dt className="text-xs font-semibold text-brand-red-dark">Slice</dt>
+          <dt className="text-xs font-semibold text-brand-red-dark">
+            Priority 5G boost
+          </dt>
           <dd className="tabular mt-1 text-2xl font-extrabold text-ink">
             {s.sliceBreaches} misses
           </dd>
@@ -458,7 +468,7 @@ function SurgeSummaryCard({ state }: { state: DemoState }) {
       </dl>
       <p className="mt-4 text-sm text-muted-foreground">
         Over {s.samples} samples, the standard network would have missed the
-        slice guarantee {s.standardBreaches} times. The slice missed it{" "}
+        boost guarantee {s.standardBreaches} times. The boost missed it{" "}
         {s.sliceBreaches} times.
       </p>
     </section>

@@ -9,7 +9,7 @@ export function SiteFooter() {
       <Container className="flex flex-col gap-8 py-10 md:flex-row md:items-start md:justify-between">
         <div className="max-w-md">
           <p className="text-lg font-extrabold tracking-[-0.03em]">
-            Slice<span className="text-brand-red">Live</span>
+            Priority <span className="text-brand-red">5G</span>
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
             Student concept for the NJIT Verizon Smart Campus Competition. All
@@ -20,7 +20,7 @@ export function SiteFooter() {
           </p>
         </div>
         <nav aria-label="Footer">
-          <ul className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm sm:grid-cols-3">
+          <ul className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm sm:grid-cols-4">
             {NAV_ITEMS.map((item) => (
               <li key={item.href}>
                 <Link

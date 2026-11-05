@@ -1,10 +1,11 @@
 import {
   Activity,
   ArrowDown,
-  CalendarClock,
+  CreditCard,
   Cpu,
   Gauge,
   RadioTower,
+  SlidersHorizontal,
   Smartphone,
 } from "lucide-react"
 
@@ -19,22 +20,27 @@ export interface ArchNode {
 
 export const ARCH_NODES: ArchNode[] = [
   {
-    title: "Customer storefront",
+    title: "Storefront and account",
     caption:
-      "Self-serve web storefront: browse packages, pick a venue and time, and book.",
+      "Customers compare plans, subscribe, start boosts, and buy upgrades.",
     icon: Smartphone,
   },
   {
-    title: "Eligibility and capacity engine",
+    title: "Subscription and entitlements",
+    caption: "Tracks each plan, speed tier, boost hours, and billing.",
+    icon: CreditCard,
+  },
+  {
+    title: "Admission control",
     caption:
-      "Checks standalone 5G coverage and device compatibility, and blocks any booking that would oversell a site.",
+      "Caps the guaranteed pool on every cell, sells seats only while they fit, and refuses boosts that would break a guarantee.",
     icon: Gauge,
   },
   {
-    title: "Pricing and scheduling",
+    title: "Policy engine",
     caption:
-      "Applies peak, off-peak, weekend, and scarcity multipliers, and holds the booking calendar.",
-    icon: CalendarClock,
+      "Maps each plan to its priority level and its plan type's slice, with eligibility checks for coverage and devices.",
+    icon: SlidersHorizontal,
   },
   {
     title: "Slice provisioning",
@@ -46,13 +52,13 @@ export const ARCH_NODES: ArchNode[] = [
   {
     title: "5G standalone core and edge",
     caption:
-      "The standalone core and RAN enforce the slice, with user-plane processing at the edge near the venue.",
+      "The standalone core and RAN enforce priority and boost guarantees, with edge processing near campus.",
     icon: RadioTower,
   },
   {
     title: "Monitoring and SLA dashboard",
     caption:
-      "Shows aggregate latency, throughput, and loss per slice, and flags any missed guarantee.",
+      "Shows aggregate latency, throughput, and loss per plan type, and refunds any boost hour that misses its guarantee.",
     icon: Activity,
   },
 ]
@@ -73,7 +79,7 @@ function wrapWords(text: string, maxChars: number) {
 
 // Desktop diagram geometry (SVG user units; scales with container width)
 const W = 1200
-const BOX_W = 168
+const BOX_W = 150
 const GAP = (W - BOX_W * ARCH_NODES.length) / (ARCH_NODES.length - 1)
 const BOX_Y = 70
 const BOX_H = 120
@@ -81,8 +87,8 @@ const x = (i: number) => i * (BOX_W + GAP)
 
 /** Horizontal flow diagram for large screens. Captions render in HTML below, aligned to boxes. */
 function DesktopDiagram() {
-  const feedbackFrom = x(5) + BOX_W / 2
-  const feedbackTo = x(1) + BOX_W / 2
+  const feedbackFrom = x(ARCH_NODES.length - 1) + BOX_W / 2
+  const feedbackTo = x(2) + BOX_W / 2
   return (
     <div className="hidden lg:block" aria-hidden="true">
       <svg
@@ -138,12 +144,12 @@ function DesktopDiagram() {
           fill="#626464"
           fontWeight="500"
         >
-          Live usage data tunes prices and capacity
+          Live usage data tunes seat limits and admission
         </text>
 
         {ARCH_NODES.map((n, i) => {
           const bx = x(i)
-          const lines = wrapWords(n.title, 15)
+          const lines = wrapWords(n.title, 14)
           return (
             <g key={n.title}>
               <rect
@@ -161,7 +167,9 @@ function DesktopDiagram() {
                 cx={bx + 22}
                 cy={BOX_Y + 24}
                 r="11"
-                fill={i === 0 || i === 5 ? "#EE0000" : "#000"}
+                fill={
+                  i === 0 || i === ARCH_NODES.length - 1 ? "#EE0000" : "#000"
+                }
               />
               <text
                 x={bx + 22}
@@ -249,7 +257,7 @@ function ListDiagram() {
   return (
     <ol
       className="space-y-0 lg:sr-only"
-      aria-label="SliceLive architecture, in request order"
+      aria-label="Priority 5G architecture, in request order"
     >
       {ARCH_NODES.map((n, i) => (
         <li key={n.title}>
@@ -290,7 +298,8 @@ function ListDiagram() {
             </div>
           ) : (
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              Monitoring data flows back to the eligibility and capacity engine.
+              Monitoring data flows back to admission control to tune seat
+              limits.
             </p>
           )}
         </li>

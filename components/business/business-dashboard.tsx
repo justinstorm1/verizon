@@ -1,30 +1,43 @@
 "use client"
 
-import { CalendarRange, CircleDollarSign, Gauge, Ticket } from "lucide-react"
+import { CalendarRange, CircleDollarSign, Repeat, Users } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { ChartCard, ChartLegend } from "@/components/chart-card"
 import { CHART_COLORS } from "@/components/charts/theme"
 import { KpiCard } from "@/components/kpi-card"
-import { DEFAULT_ASSUMPTIONS, type BusinessAssumptions } from "@/lib/config"
-import { formatInt, formatPct, formatUSD, formatUSDCompact } from "@/lib/format"
+import {
+  DEFAULT_ASSUMPTIONS,
+  PLAN_ORDER,
+  PLANS,
+  type BusinessAssumptions,
+} from "@/lib/config"
+import {
+  formatInt,
+  formatPct,
+  formatUSDCents,
+  formatUSDCompact,
+} from "@/lib/format"
 import { projectBusiness } from "@/lib/simulate"
 import { cn } from "@/lib/utils"
 
 import { AssumptionsPanel } from "./assumptions-panel"
 import {
+  CapacityChart,
   FunnelChart,
   MonthlyChart,
-  UseCaseDonut,
-  UtilizationChart,
+  PLAN_COLORS,
+  RevenueMixDonut,
 } from "./business-charts"
+
+type Metric = "revenue" | "subscribers"
 
 function MetricToggle({
   value,
   onChange,
 }: {
-  value: "revenue" | "bookings"
-  onChange: (v: "revenue" | "bookings") => void
+  value: Metric
+  onChange: (v: Metric) => void
 }) {
   return (
     <div
@@ -32,7 +45,7 @@ function MetricToggle({
       aria-label="Chart metric"
       className="inline-flex rounded-full border border-gray-mid p-0.5"
     >
-      {(["revenue", "bookings"] as const).map((m) => (
+      {(["revenue", "subscribers"] as const).map((m) => (
         <button
           key={m}
           type="button"
@@ -56,8 +69,11 @@ function MetricToggle({
 export function BusinessDashboard() {
   const [assumptions, setAssumptions] =
     useState<BusinessAssumptions>(DEFAULT_ASSUMPTIONS)
-  const [metric, setMetric] = useState<"revenue" | "bookings">("revenue")
+  const [metric, setMetric] = useState<Metric>("revenue")
   const p = useMemo(() => projectBusiness(assumptions), [assumptions])
+  const upgradeShare = p.revenueMix
+    .filter((r) => r.id !== "base")
+    .reduce((s, r) => s + r.share, 0)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-8">
@@ -71,19 +87,19 @@ export function BusinessDashboard() {
           className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
         >
           <KpiCard
-            label="Projected annual revenue"
-            value={formatUSDCompact(p.annualRevenue)}
+            label="Year-one revenue"
+            value={formatUSDCompact(p.yearOneRevenue)}
             accent
             icon={<CircleDollarSign />}
-            detail={`Year one · ${formatUSDCompact(p.steadyStateMonthlyRevenue)}/mo at full adoption`}
+            detail={`${formatUSDCompact(p.exitArr)} annual run rate by month 12`}
           />
           <KpiCard
-            label="Avg utilization lift"
-            value={`+${p.utilizationLiftPts.toFixed(1)}`}
-            unit="pts"
+            label="Revenue per subscriber"
+            value={formatUSDCents(p.arpu)}
+            unit="/mo"
             accent
-            icon={<Gauge />}
-            detail={`${formatPct(p.utilizationLiftPct, 1)} relative · +${p.nonPeakLiftPts.toFixed(1)} pts off-peak vs +${p.peakLiftPts.toFixed(1)} at peak`}
+            icon={<Repeat />}
+            detail={`${formatPct(upgradeShare)} of revenue from upgrades`}
           />
           <KpiCard
             label="Payback estimate"
@@ -96,58 +112,72 @@ export function BusinessDashboard() {
                   : "months"
             }
             icon={<CalendarRange />}
-            detail={`Recovers ${formatUSD(p.upfrontCost)} up-front cost`}
+            detail={`Recovers ${formatUSDCompact(p.upfrontCost)} up-front cost`}
           />
           <KpiCard
-            label="Bookings, year one"
-            value={formatInt(p.annualBookings)}
-            icon={<Ticket />}
-            detail={`${formatInt(assumptions.numberOfSites)} sites · ${formatUSD(p.effectivePrice)}/hr effective price`}
+            label="Subscribers at month 12"
+            value={formatInt(p.subscribersAtExit)}
+            icon={<Users />}
+            detail={
+              p.waitlistAtExit
+                ? `${formatInt(p.waitlistAtExit)} turned away to the waitlist`
+                : "No waitlist yet"
+            }
           />
         </section>
 
         <ChartCard
           title={
             metric === "revenue"
-              ? "Projected monthly revenue"
-              : "Projected monthly bookings"
+              ? "Monthly recurring revenue by plan"
+              : "Subscribers by plan"
           }
-          description="First 12 months after launch. Adoption ramps up from 25% of steady-state bookings."
+          description="First 12 months after launch. Sign-ups ramp up, then flatten once a plan's seats fill."
           actions={<MetricToggle value={metric} onChange={setMetric} />}
-          footer="Simulated projection from the assumptions panel. Hover a bar for revenue, bookings, and cumulative net."
+          footer={
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <ChartLegend
+                items={PLAN_ORDER.map((id) => ({
+                  label: PLANS[id].name,
+                  color: PLAN_COLORS[id],
+                }))}
+              />
+              <span>Simulated projection from the assumptions panel.</span>
+            </div>
+          }
         >
           <MonthlyChart months={p.months} metric={metric} />
         </ChartCard>
 
         <div className="grid gap-6 2xl:grid-cols-2">
           <ChartCard
-            title="Revenue by use case"
-            description="Booking mix weighted by each use case's typical slice price and duration."
-            footer="Simulated. Booking mix is an assumption."
-          >
-            <UseCaseDonut data={p.revenueByUseCase} />
-          </ChartCard>
-          <ChartCard
-            title="Cell utilization, before vs. after"
-            description="Average weekday load by hour. The off-peak share decides how many slice-hours land outside 4–10 PM."
-            footer="Simulated. Baseline utilization curve is an assumption."
+            title="Seats vs. demand at month 12"
+            description="Seats are capped by each cell's guaranteed pool. Demand past the cap goes to a waitlist instead of diluting the guarantee."
             actions={
               <ChartLegend
                 items={[
-                  { label: "With SliceLive", color: CHART_COLORS.slice },
-                  { label: "Before", color: CHART_COLORS.standard },
+                  { label: "Subscribed", color: CHART_COLORS.slice },
+                  { label: "Waitlisted", color: CHART_COLORS.standardLight },
                 ]}
               />
             }
+            footer="Simulated. Raise the pool cap to add seats, at the cost of less room for regular users."
           >
-            <UtilizationChart data={p.utilization} />
+            <CapacityChart data={p.capacity} />
+          </ChartCard>
+          <ChartCard
+            title="Where the revenue comes from"
+            description="Base subscriptions vs. upgrades for more speed or more time."
+            footer="Simulated. Upgrade spend and split are assumptions."
+          >
+            <RevenueMixDonut data={p.revenueMix} />
           </ChartCard>
         </div>
 
         <ChartCard
-          title="Customer funnel: first booking to enterprise upgrade"
-          description="Self-serve customers who keep booking become leads for the enterprise slicing portfolio."
-          footer="Simulated from the funnel assumptions (bookings per customer and stage conversion rates)."
+          title="Customer funnel: trial to enterprise lead"
+          description="Subscribers who upgrade, and organizations and businesses that outgrow a plan, become leads for enterprise slicing."
+          footer="Simulated from the funnel assumptions."
         >
           <FunnelChart data={p.funnel} />
         </ChartCard>

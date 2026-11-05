@@ -11,22 +11,22 @@ const PRIVACY = [
   {
     icon: Eye,
     title: "Aggregate performance only",
-    body: "Customers see latency, throughput, and loss for their slice as a whole, never for individual devices or people.",
+    body: "Customers see latency, throughput, and loss for their plan as a whole, never for individual devices or other people.",
   },
   {
     icon: FileLock2,
     title: "No personal data in monitoring",
-    body: "Monitoring uses network performance counters only. No names, phone numbers, locations, or traffic content.",
+    body: "Monitoring uses network performance counters only. No names, phone numbers, locations, or traffic content. Billing details stay in the account system.",
   },
   {
     icon: KeyRound,
     title: "Scoped access",
-    body: "Each booking gets its own credentials, so a customer can only see their own slices.",
+    body: "Each account has its own credentials, so customers can only see their own plan's performance.",
   },
   {
     icon: Lock,
     title: "Isolation by design",
-    body: "Each slice runs on reserved resources, so one customer's traffic can't affect another's. This demo stores nothing; it all runs in your browser.",
+    body: "Each plan type runs in its own slice with a capped share of the cell, so one group can't crowd out another, and regular users always keep the rest. This demo stores nothing; it all runs in your browser.",
   },
 ]
 
@@ -35,8 +35,8 @@ export default function ArchitecturePage() {
     <>
       <PageHeader
         eyebrow="Architecture"
-        title="From booking to a guaranteed slice"
-        description="A booking passes eligibility and capacity checks, gets priced and scheduled, and is provisioned before the 5G standalone core enforces it. Monitoring then checks the guarantee for its whole duration."
+        title="From subscription to a guaranteed boost"
+        description="A subscription sets a customer's priority level and boost hours. Admission control decides who gets a seat and whether each boost can start, the 5G standalone core enforces it, and monitoring checks every boost against its guarantee."
       />
 
       <Container className="py-12 sm:py-16">
@@ -117,9 +117,9 @@ export default function ArchitecturePage() {
               <div>
                 <dt className="font-semibold text-ink">In this prototype</dt>
                 <dd className="mt-1 text-muted-foreground">
-                  The storefront, eligibility checks, pricing engine, capacity
-                  check, and monitoring views. All of them run on a seeded
-                  simulation in the browser.
+                  The storefront, subscription and account pages, eligibility
+                  checks, admission control, and monitoring views. All of them
+                  run on a seeded simulation in the browser.
                 </dd>
               </div>
               <div>
@@ -134,8 +134,8 @@ export default function ArchitecturePage() {
                 <dd className="mt-1 text-muted-foreground">
                   Provisioning would integrate with the operator&apos;s
                   orchestration systems, for example through a network-exposure
-                  layer such as 3GPP NEF or CAMARA-style slice booking APIs, on
-                  a standalone 5G core with slice-aware RAN scheduling.
+                  layer such as 3GPP NEF or CAMARA-style quality-on-demand APIs,
+                  on a standalone 5G core with slice-aware RAN scheduling.
                 </dd>
               </div>
             </dl>

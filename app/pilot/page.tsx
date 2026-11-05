@@ -12,90 +12,101 @@ export const metadata: Metadata = { title: "Pilot plan" }
 
 const TIMELINE = [
   {
-    when: "Weeks 1–2",
-    title: "Partner and plan",
-    body: "Choose one campus event and its organizers, confirm the venue, and agree on success metrics and a data-sharing plan.",
+    when: "Weeks 1–3",
+    title: "Recruit and set up",
+    body: "Recruit about 60 pilot subscribers across all four plans, confirm two campus cells, and agree on metrics and data sharing.",
   },
   {
-    when: "Week 3",
-    title: "Site survey",
-    body: "Confirm standalone 5G coverage across the venue, and measure the standard network during a comparable busy period.",
+    when: "Weeks 4–5",
+    title: "Check coverage and devices",
+    body: "Survey standalone 5G on both cells, run eligibility checks for every subscriber, and hand out SA hotspots where needed.",
   },
   {
-    when: "Week 4",
-    title: "Device check",
-    body: "List the devices organizers will use, run eligibility checks, and stage SA hotspots for anything that can't join a slice.",
+    when: "Weeks 6–9",
+    title: "Free month",
+    body: "Everyone gets everyday priority and boost hours at no cost. We measure boosts against the regular network side by side.",
   },
   {
-    when: "Week 5",
-    title: "Dry run",
-    body: "Organizers book their slices through the storefront. We activate them in a rehearsal and verify the SLA dashboard.",
+    when: "Weeks 10–13",
+    title: "Paid month",
+    body: "Subscribers pay pilot prices and can upgrade for more speed or time. We track upgrades, cancellations, and waitlist demand.",
   },
   {
-    when: "Week 6",
-    title: "Event day",
-    body: "Slices run for the event, with the standard network measured side by side. Support is on site.",
+    when: "Week 14",
+    title: "Big-event stress test",
+    body: "Run one large campus event with seats deliberately full, to test admission control and refused-boost handling.",
   },
   {
-    when: "Week 7",
+    when: "Weeks 15–16",
     title: "Report and decide",
-    body: "Compare results to targets, survey organizers, and make a go / no-go call on a multi-event pilot.",
+    body: "Compare results to targets, survey subscribers and non-subscribers, and decide whether to expand to more cells.",
   },
 ]
 
 const METRICS = [
   {
-    metric: "Latency vs. standard network",
+    metric: "Boost guarantee hit rate",
     measure:
-      "95th-percentile latency on the slice and on the standard network during the event's busiest hour",
-    target: `Slice ≤ ${DEMO.slice.guaranteeLatencyMs} ms, and at least 3× lower than standard`,
+      "Share of boost minutes that met the plan's latency and throughput guarantee, including during the stress test",
+    target: "99.9% or higher",
   },
   {
-    metric: "Throughput vs. standard network",
+    metric: "Impact on regular users",
     measure:
-      "Sustained throughput per slice compared with a standard-network device at the same spot",
-    target: "At or above the booked rate in 99.9% of minutes",
+      "Latency and throughput for non-subscribers at peak, with and without pilot boosts running",
+    target: "No more than 10% slower at peak",
   },
   {
-    metric: "Booking-to-activation time",
+    metric: "Boost vs. regular network",
     measure:
-      "Time from the organizer confirming a booking to the slice being ready to use",
-    target: "Under 15 minutes",
+      "95th-percentile latency for boosting subscribers vs. the regular network in the busiest hour",
+    target: `Boost ≤ ${DEMO.slice.guaranteeLatencyMs} ms and at least 3× lower`,
   },
   {
-    metric: "Organizer satisfaction",
-    measure: 'Post-event survey, 1 to 5, plus "would you book again?"',
-    target: "Average 4.5 or higher; 80% would book again",
+    metric: "Upgrades and retention",
+    measure:
+      "Share of paid subscribers who buy more speed or time, and who keep their plan after the pilot",
+    target: "20% upgrade; 70% would keep their plan",
+  },
+  {
+    metric: "Subscriber satisfaction",
+    measure: "End-of-pilot survey, 1 to 5",
+    target: "Average 4.3 or higher",
   },
 ]
 
 const RISKS = [
   {
-    risk: "Device compatibility",
+    risk: "Everyone gets priority",
     detail:
-      "Organizers bring LTE or non-standalone devices that can't join a slice.",
+      "If too many people subscribe, priority turns into another crowded network.",
+    mitigation: `Each cell caps guarantees at ${formatPct(CAPACITY.guaranteedPoolCap)} of capacity and stops selling seats when full. Extra demand goes to a waitlist.`,
+  },
+  {
+    risk: "Fairness to non-subscribers",
+    detail:
+      "Regular users may feel pushed aside, which can hurt the campus's goodwill.",
     mitigation:
-      "Device check at booking, a week-4 device inventory, and loaner SA hotspots so older devices can connect over Wi-Fi.",
+      "Regular traffic always keeps at least 65% of each cell. Impact on regular users is a pilot metric with a pass/fail target.",
+  },
+  {
+    risk: "Device compatibility",
+    detail: "Older or LTE-only phones and card readers can't join a slice.",
+    mitigation:
+      "Device check at sign-up, plus loaner SA hotspots so older devices can connect over Wi-Fi.",
   },
   {
     risk: "Coverage",
-    detail:
-      "Parts of the venue lack standalone 5G, for example indoors or below grade.",
+    detail: "Parts of campus lack standalone 5G, for example below grade.",
     mitigation:
-      "Week-3 site survey. The storefront blocks venues without coverage and suggests a nearby alternative.",
-  },
-  {
-    risk: "Oversell",
-    detail:
-      "Too many slices are reserved for the site's capacity, so guarantees slip.",
-    mitigation: `The capacity engine caps reservations at ${formatPct(CAPACITY.maxReservable)} of sliceable capacity. The pilot is limited to five slices.`,
+      "Coverage survey before launch. Sign-up blocks cells without coverage and suggests a nearby one.",
   },
   {
     risk: "Pricing assumptions",
     detail:
-      "Demand, price per hour, and off-peak uptake are unvalidated assumptions.",
+      "Plan prices, upgrade rates, and churn are unvalidated assumptions.",
     mitigation:
-      "Run the pilot free or discounted, survey willingness to pay, and update the assumptions in the business model with real results.",
+      "Test pilot prices in the paid month, survey willingness to pay, and update the business model with real results.",
   },
 ]
 
@@ -104,8 +115,8 @@ export default function PilotPage() {
     <>
       <PageHeader
         eyebrow="Pilot plan"
-        title="Prove it at one NJIT campus event"
-        description="A seven-week plan to test SliceLive with real organizers at a single campus event before scaling. Weeks are relative to kickoff; all targets are proposed."
+        title="One semester on two NJIT campus cells"
+        description="A 16-week plan to test Priority 5G subscriptions with real students, families, businesses, and organizations before expanding. Weeks are relative to kickoff; all targets are proposed."
       />
 
       <Container className="space-y-16 py-12 sm:py-16">
@@ -113,10 +124,10 @@ export default function PilotPage() {
         <section aria-label="Pilot at a glance">
           <dl className="grid gap-px overflow-hidden rounded-lg border border-gray-mid bg-gray-mid sm:grid-cols-2 lg:grid-cols-4">
             {[
-              ["Scope", "One venue, one event day"],
-              ["Example event", "Outdoor festival or esports tournament"],
-              ["Slices", "Up to 5: livestream, vendors, staff comms"],
-              ["Duration", "7 weeks from kickoff to decision"],
+              ["Scope", "Two campus cells"],
+              ["Subscribers", "About 60 across all four plans"],
+              ["Pricing", "One free month, then one paid month"],
+              ["Duration", "16 weeks from kickoff to decision"],
             ].map(([k, v]) => (
               <div key={k} className="bg-white p-5">
                 <dt className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -279,14 +290,15 @@ export default function PilotPage() {
         <section className="flex flex-col items-start justify-between gap-6 rounded-lg bg-ink p-8 text-white md:flex-row md:items-center">
           <div>
             <h2 className="text-2xl font-extrabold tracking-[-0.02em]">
-              See what organizers would book.
+              See what pilot subscribers would sign up for.
             </h2>
             <p className="mt-2 text-[#c9cbcb]">
-              Walk through the storefront exactly as a pilot organizer would.
+              Walk through the plans and sign-up exactly as a pilot subscriber
+              would.
             </p>
           </div>
-          <Link href="/book" className={buttonVariants({ size: "lg" })}>
-            Try the booking flow
+          <Link href="/plans" className={buttonVariants({ size: "lg" })}>
+            See the plans
             <ArrowRight />
           </Link>
         </section>

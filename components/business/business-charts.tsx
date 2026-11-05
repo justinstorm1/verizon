@@ -1,8 +1,6 @@
 "use client"
 
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -10,7 +8,6 @@ import {
   LabelList,
   Pie,
   PieChart,
-  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -24,17 +21,31 @@ import {
   CATEGORY_COLORS,
   CHART_COLORS,
 } from "@/components/charts/theme"
-import { PRICING } from "@/lib/config"
-import { formatInt, formatPct, formatUSD, formatUSDCompact } from "@/lib/format"
+import { PLAN_ORDER, PLANS, type PlanId } from "@/lib/config"
+import {
+  formatInt,
+  formatIntCompact,
+  formatPct,
+  formatUSD,
+  formatUSDCompact,
+} from "@/lib/format"
 import type {
+  BusinessProjection,
   FunnelStage,
   MonthProjection,
-  UseCaseRevenue,
-  UtilizationPoint,
+  SegmentCapacity,
 } from "@/lib/simulate"
 
+/** Fixed color per plan, in categorical order (never reassigned by rank) */
+export const PLAN_COLORS: Record<PlanId, string> = {
+  individual: CATEGORY_COLORS[0],
+  family: CATEGORY_COLORS[1],
+  "small-business": CATEGORY_COLORS[2],
+  organization: CATEGORY_COLORS[4],
+}
+
 // ---------------------------------------------------------------------------
-// Monthly revenue or bookings
+// Monthly recurring revenue or subscribers, stacked by plan
 // ---------------------------------------------------------------------------
 
 export function MonthlyChart({
@@ -42,20 +53,32 @@ export function MonthlyChart({
   metric,
 }: {
   months: MonthProjection[]
-  metric: "revenue" | "bookings"
+  metric: "revenue" | "subscribers"
 }) {
   const isRevenue = metric === "revenue"
+  const data = months.map((m) => ({
+    label: m.label,
+    month: m.month,
+    total: isRevenue ? m.totalRevenue : m.totalSubscribers,
+    ...Object.fromEntries(
+      PLAN_ORDER.map((id) => [
+        id,
+        isRevenue ? m.revenue[id] : m.subscribers[id],
+      ])
+    ),
+  }))
+  const fmt = (v: number) => (isRevenue ? formatUSD(v) : formatInt(v))
   const first = months[0]
   const last = months[months.length - 1]
   const summary = isRevenue
-    ? `Bar chart of projected monthly revenue over 12 months, rising from ${formatUSD(first.revenue)} in month 1 to ${formatUSD(last.revenue)} in month 12.`
-    : `Bar chart of projected monthly bookings over 12 months, rising from ${formatInt(first.bookings)} in month 1 to ${formatInt(last.bookings)} in month 12.`
+    ? `Stacked bar chart of monthly recurring revenue by plan, from ${formatUSD(first.totalRevenue)} in month 1 to ${formatUSD(last.totalRevenue)} in month 12.`
+    : `Stacked bar chart of subscribers by plan, from ${formatInt(first.totalSubscribers)} in month 1 to ${formatInt(last.totalSubscribers)} in month 12.`
 
   return (
     <div className="h-[300px] w-full" role="img" aria-label={summary}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
-          data={months}
+          data={data}
           margin={{ top: 8, right: 8, bottom: 20, left: 8 }}
           barCategoryGap="22%"
         >
@@ -78,10 +101,10 @@ export function MonthlyChart({
             axisLine={false}
             width={64}
             tickFormatter={(v: number) =>
-              isRevenue ? formatUSDCompact(v) : formatInt(v)
+              isRevenue ? formatUSDCompact(v) : formatIntCompact(v)
             }
             label={{
-              value: isRevenue ? "Revenue (USD)" : "Bookings",
+              value: isRevenue ? "Monthly revenue (USD)" : "Subscribers",
               angle: -90,
               position: "insideLeft",
               offset: 0,
@@ -91,41 +114,39 @@ export function MonthlyChart({
           <Tooltip
             cursor={{ fill: CHART_COLORS.ink, fillOpacity: 0.04 }}
             content={({ active, payload }) => {
-              const m = payload?.[0]?.payload as MonthProjection | undefined
-              if (!active || !m) return null
+              const d = payload?.[0]?.payload as
+                | (Record<string, number> & { month: number; total: number })
+                | undefined
+              if (!active || !d) return null
               return (
                 <ChartTooltip
-                  title={`Month ${m.month}`}
+                  title={`Month ${d.month}`}
                   rows={[
-                    {
-                      label: "Revenue",
-                      value: formatUSD(m.revenue),
-                      color: isRevenue ? CHART_COLORS.slice : undefined,
-                      emphasis: isRevenue,
-                    },
-                    {
-                      label: "Bookings",
-                      value: formatInt(m.bookings),
-                      color: isRevenue ? undefined : CHART_COLORS.slice,
-                      emphasis: !isRevenue,
-                    },
-                    {
-                      label: "Cumulative net",
-                      value: formatUSD(m.cumulativeNet),
-                    },
+                    ...[...PLAN_ORDER].reverse().map((id) => ({
+                      label: PLANS[id].name,
+                      value: fmt(d[id]),
+                      color: PLAN_COLORS[id],
+                    })),
+                    { label: "Total", value: fmt(d.total), emphasis: true },
                   ]}
                 />
               )
             }}
           />
-          <Bar
-            dataKey={metric}
-            name={isRevenue ? "Revenue" : "Bookings"}
-            fill={CHART_COLORS.slice}
-            radius={[4, 4, 0, 0]}
-            maxBarSize={44}
-            animationDuration={400}
-          />
+          {PLAN_ORDER.map((id, i) => (
+            <Bar
+              key={id}
+              dataKey={id}
+              name={PLANS[id].name}
+              stackId="plans"
+              fill={PLAN_COLORS[id]}
+              stroke={CHART_COLORS.surface}
+              strokeWidth={1}
+              radius={i === PLAN_ORDER.length - 1 ? [4, 4, 0, 0] : 0}
+              maxBarSize={44}
+              animationDuration={400}
+            />
+          ))}
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -133,18 +154,23 @@ export function MonthlyChart({
 }
 
 // ---------------------------------------------------------------------------
-// Revenue by use case (donut)
+// Revenue mix: base subscriptions vs. upgrades (donut)
 // ---------------------------------------------------------------------------
 
-export function UseCaseDonut({ data }: { data: UseCaseRevenue[] }) {
-  const summary = `Donut chart of year-one revenue by use case: ${data
+const MIX_COLORS = [CHART_COLORS.ink, CHART_COLORS.slice, CHART_COLORS.standard]
+
+export function RevenueMixDonut({
+  data,
+}: {
+  data: BusinessProjection["revenueMix"]
+}) {
+  const summary = `Donut chart of year-one revenue: ${data
     .map((d) => `${d.label} ${formatPct(d.share)}`)
     .join(", ")}.`
-
   return (
-    <div className="grid items-center gap-6 sm:grid-cols-[minmax(0,220px)_1fr]">
+    <div className="grid items-center gap-6 sm:grid-cols-[minmax(0,200px)_1fr]">
       <div
-        className="relative mx-auto h-[220px] w-full max-w-[220px]"
+        className="relative mx-auto h-[200px] w-full max-w-[200px]"
         role="img"
         aria-label={summary}
       >
@@ -164,15 +190,13 @@ export function UseCaseDonut({ data }: { data: UseCaseRevenue[] }) {
               animationDuration={400}
             >
               {data.map((d, i) => (
-                <Cell
-                  key={d.id}
-                  fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]}
-                />
+                <Cell key={d.id} fill={MIX_COLORS[i]} />
               ))}
             </Pie>
             <Tooltip
               content={({ active, payload }) => {
-                const d = payload?.[0]?.payload as UseCaseRevenue | undefined
+                const d = payload?.[0]?.payload as
+                  (typeof data)[number] | undefined
                 if (!active || !d) return null
                 return (
                   <ChartTooltip
@@ -199,14 +223,12 @@ export function UseCaseDonut({ data }: { data: UseCaseRevenue[] }) {
         </div>
       </div>
       {/* Direct labels double as the legend and a table view */}
-      <ul className="space-y-3" aria-label="Revenue by use case">
+      <ul className="space-y-3" aria-label="Revenue mix">
         {data.map((d, i) => (
           <li key={d.id} className="flex items-center gap-3">
             <span
               className="size-3 shrink-0 rounded-sm"
-              style={{
-                backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
-              }}
+              style={{ backgroundColor: MIX_COLORS[i] }}
               aria-hidden="true"
             />
             <span className="flex-1 text-sm text-ink">{d.label}</span>
@@ -224,124 +246,115 @@ export function UseCaseDonut({ data }: { data: UseCaseRevenue[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Utilization before vs. after
+// Seats vs. demand: subscribers admitted and waitlisted, by plan
 // ---------------------------------------------------------------------------
 
-export function UtilizationChart({ data }: { data: UtilizationPoint[] }) {
-  const [peakStart, peakEnd] = PRICING.peakHours
-  const summary = `Area chart of average cell utilization by hour of day, before and after SliceLive. Bookings fill daytime and late-evening hours more than the evening peak.`
-
+export function CapacityChart({ data }: { data: SegmentCapacity[] }) {
+  const summary = `Stacked bar chart of subscribers and waitlist at month 12 by plan: ${data
+    .map(
+      (d) =>
+        `${d.label} ${formatInt(d.subscribers)} subscribed of ${formatInt(d.seats)} seats, ${formatInt(d.waitlist)} waitlisted`
+    )
+    .join("; ")}.`
   return (
-    <div className="h-[300px] w-full" role="img" aria-label={summary}>
+    <div className="h-[280px] w-full" role="img" aria-label={summary}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
+        <BarChart
           data={data}
-          margin={{ top: 8, right: 8, bottom: 20, left: 0 }}
+          margin={{ top: 8, right: 8, bottom: 20, left: 8 }}
+          barCategoryGap="30%"
         >
           <CartesianGrid vertical={false} stroke={CHART_COLORS.grid} />
-          <ReferenceArea
-            x1={peakStart}
-            x2={peakEnd - 1}
-            fill={CHART_COLORS.ink}
-            fillOpacity={0.04}
-            label={{
-              value: "Peak pricing",
-              position: "insideTop",
-              fill: CHART_COLORS.axis,
-              fontSize: 11,
-            }}
-          />
           <XAxis
-            dataKey="hour"
-            type="number"
-            domain={[0, 23]}
-            ticks={[0, 4, 8, 12, 16, 20, 23]}
+            dataKey="label"
             tick={AXIS_TICK}
             tickLine={false}
             axisLine={{ stroke: CHART_COLORS.standardLight }}
-            tickFormatter={(h: number) => data[h]?.label ?? ""}
             label={{
-              value: "Hour of day",
+              value: "Plan",
               position: "insideBottom",
               offset: -12,
               style: AXIS_LABEL_STYLE,
             }}
           />
           <YAxis
-            domain={[0, 100]}
-            ticks={[0, 25, 50, 75, 100]}
             tick={AXIS_TICK}
             tickLine={false}
             axisLine={false}
-            width={52}
-            tickFormatter={(v: number) => `${v}%`}
+            width={56}
+            tickFormatter={(v: number) => formatIntCompact(v)}
             label={{
-              value: "Cell utilization (%)",
+              value: "Customers",
               angle: -90,
               position: "insideLeft",
-              offset: 8,
+              offset: 0,
               style: { ...AXIS_LABEL_STYLE, textAnchor: "middle" },
             }}
           />
           <Tooltip
-            cursor={{ stroke: CHART_COLORS.axis, strokeWidth: 1 }}
+            cursor={{ fill: CHART_COLORS.ink, fillOpacity: 0.04 }}
             content={({ active, payload }) => {
-              const p = payload?.[0]?.payload as UtilizationPoint | undefined
-              if (!active || !p) return null
+              const d = payload?.[0]?.payload as SegmentCapacity | undefined
+              if (!active || !d) return null
               return (
                 <ChartTooltip
-                  title={p.label}
+                  title={d.label}
                   rows={[
                     {
-                      label: "With SliceLive",
-                      value: `${p.after.toFixed(1)}%`,
+                      label: "Subscribed",
+                      value: formatInt(d.subscribers),
                       color: CHART_COLORS.slice,
                       emphasis: true,
                     },
                     {
-                      label: "Before",
-                      value: `${p.before.toFixed(1)}%`,
-                      color: CHART_COLORS.standard,
+                      label: "Waitlisted",
+                      value: formatInt(d.waitlist),
+                      color: CHART_COLORS.standardLight,
                     },
-                    {
-                      label: "Lift",
-                      value: `+${(p.after - p.before).toFixed(1)} pts`,
-                    },
+                    { label: "Seats (all sites)", value: formatInt(d.seats) },
                   ]}
                 />
               )
             }}
           />
-          <Area
-            type="monotone"
-            dataKey="after"
-            name="With SliceLive"
-            stroke={CHART_COLORS.slice}
-            strokeWidth={2}
+          <Bar
+            dataKey="subscribers"
+            name="Subscribed"
+            stackId="c"
             fill={CHART_COLORS.slice}
-            fillOpacity={0.1}
+            stroke={CHART_COLORS.surface}
+            strokeWidth={1}
+            maxBarSize={64}
             animationDuration={400}
-            activeDot={{ r: 4, stroke: CHART_COLORS.surface, strokeWidth: 2 }}
           />
-          <Area
-            type="monotone"
-            dataKey="before"
-            name="Before"
-            stroke={CHART_COLORS.standard}
-            strokeWidth={2}
+          <Bar
+            dataKey="waitlist"
+            name="Waitlisted"
+            stackId="c"
             fill={CHART_COLORS.standardLight}
-            fillOpacity={0.6}
+            stroke={CHART_COLORS.surface}
+            strokeWidth={1}
+            radius={[4, 4, 0, 0]}
+            maxBarSize={64}
             animationDuration={400}
-            activeDot={{ r: 4, stroke: CHART_COLORS.surface, strokeWidth: 2 }}
-          />
-        </AreaChart>
+          >
+            <LabelList
+              dataKey="waitlist"
+              position="top"
+              formatter={(v) =>
+                Number(v) > 0 ? `+${formatInt(Number(v))} waiting` : ""
+              }
+              style={{ fill: CHART_COLORS.ink, fontSize: 11, fontWeight: 600 }}
+            />
+          </Bar>
+        </BarChart>
       </ResponsiveContainer>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Customer funnel: first booking to enterprise upgrade
+// Customer funnel: trial to enterprise lead
 // ---------------------------------------------------------------------------
 
 export function FunnelChart({ data }: { data: FunnelStage[] }) {
@@ -364,7 +377,7 @@ export function FunnelChart({ data }: { data: FunnelStage[] }) {
             tick={AXIS_TICK}
             tickLine={false}
             axisLine={{ stroke: CHART_COLORS.standardLight }}
-            tickFormatter={(v: number) => formatInt(v)}
+            tickFormatter={(v: number) => formatIntCompact(v)}
             label={{
               value: "Customers per year",
               position: "insideBottom",

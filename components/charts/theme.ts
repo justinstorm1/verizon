@@ -1,4 +1,4 @@
-/** Chart palette: red = SliceLive slice, gray = standard network. */
+/** Chart palette: red = priority slice, gray = standard network. */
 export const CHART_COLORS = {
   slice: "#EE0000",
   standard: "#747676",

@@ -10,11 +10,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
 export const metadata: Metadata = {
   title: {
-    default: "SliceLive: Guaranteed 5G, booked in a minute",
-    template: "%s · SliceLive",
+    default: "Priority 5G: guaranteed campus 5G by subscription",
+    template: "%s · Priority 5G",
   },
   description:
-    "Student concept: a self-serve marketplace for booking guaranteed-quality 5G network slices by the hour. All data simulated.",
+    "Student concept for the NJIT Verizon Smart Campus Competition: subscription plans for guaranteed-quality 5G with upgrades for more speed and time. All data simulated.",
 }
 
 export default function RootLayout({

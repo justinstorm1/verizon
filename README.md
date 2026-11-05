@@ -1,10 +1,15 @@
-# SliceLive (concept demo)
+# Priority 5G (concept demo)
 
-**Guaranteed 5G, booked in minutes.** SliceLive is a student concept for a self-serve storefront where small businesses, student orgs, and event organizers book guaranteed-quality 5G network slices by the hour.
+**Guaranteed 5G on campus, by subscription.** Priority 5G is a student concept for the **NJIT Verizon Smart Campus Competition** (pillar: Next-Gen Products & Services).
 
-**Positioning:** Verizon already builds and sells network slices, mainly through enterprise channels. SliceLive is the self-serve booking layer on top of that portfolio.
+Individuals, families, small businesses, and organizations subscribe monthly. Every plan includes:
 
-Built for the **NJIT Verizon Smart Campus Competition**, pillar **Next-Gen Products & Services**.
+- **Everyday priority** over regular traffic.
+- **Boost hours:** time with a full speed, latency, and reliability guarantee.
+
+Subscribers upgrade for **more speed** (Fast and Max tiers) or **more time** (extra boost hours).
+
+**Positioning:** Verizon already builds and sells network slices, mainly through enterprise channels. Priority 5G is a subscription layer that brings that portfolio to everyone on campus.
 
 > Student concept for the NJIT Verizon Smart Campus Competition. All data simulated. Not affiliated with Verizon.
 >
@@ -27,165 +32,168 @@ npm run dev        # http://localhost:3000
 | `npm run typecheck` | TypeScript, no emit                  |
 | `npm run format`    | Prettier                             |
 
+## "If everyone gets a slice, isn't it just normal 5G?"
+
+It would be, if nothing limited it. The design answers this with four rules, all modeled in `lib/simulate.ts`:
+
+1. **Guarantees are capped.** Each cell gives guarantees at most 35% of its capacity (`CAPACITY.guaranteedPoolCap`). Regular users always keep the rest.
+2. **Seats are limited.** Each plan type gets its own share of that pool, its own slice: Organization 40%, Small business 25%, Individual 20%, Family 15%. When a share is full, sign-ups go to a waitlist (`seatAvailability`).
+3. **Guarantees are time-boxed.** Day to day, subscribers get priority only. The full guarantee runs during metered boost hours, so only a fraction of subscribers boost at once (`peakConcurrency`).
+4. **No silent slowdowns.** A boost that won't fit is refused with the next open hour. It never starts degraded (`requestBoost`).
+
+The demo page's "What if everyone subscribes?" explorer shows the difference. With admission control off, priority latency climbs to meet the regular network. With it on, priority stays under the 30 ms guarantee and the extra demand waits for a seat.
+
 ## Pages
 
-| Route           | What it shows                                                                                                                                                                                                                                                                                                                                                                                                          |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`             | Hero, "The gap" comparison table (enterprise-led today vs. SliceLive), 4 customer scenarios, a 5-step "How it works" (Choose, Check eligibility, Price, Activate, Prove), and a 4-item value strip (new revenue, off-peak utilization, portfolio showcase, upgrade pipeline)                                                                                                                                           |
-| `/catalog`      | 4 packages, each labeled "Illustrative profile": Event Priority, Livestream Uplink, Payments Reliability, Safety & Staff Comms. Each shows guaranteed throughput, max latency, reliability target, typical duration, ideal customer, and a simulated price range. "Book this package" opens `/book?package=…`                                                                                                          |
-| `/book`         | 4-step wizard: (1) venue, date and time window, use case; (2) eligibility: standalone 5G coverage and device compatibility, with pass / warn / fail states and one-click fixes; (3) recommended profile with sliders, a live demand-priced quote, and "Site capacity reserved: X%". Oversold bookings are blocked and the nearest window that fits is suggested; (4) summary, then "Slice scheduled" with a booking ID |
-| `/demo`         | Labeled "Simulated network. Illustrative values." "Start crowd surge" ramps load over 30 s. Latency and throughput charts (slice in red, standard in gray), KPI cards (latency, throughput, packet loss, SLA status, uptime), and an active-slices table                                                                                                                                                               |
-| `/business`     | Assumptions panel (price per hour, bookings per site per month, sites, off-peak share, hours per booking), each input tagged "Assumption". Charts: 12-month revenue/bookings bars, revenue-by-use-case donut, utilization before vs. after, and a customer funnel to enterprise upgrade. Summary row: annual revenue, utilization lift, payback, bookings                                                              |
-| `/architecture` | Diagram: Customer storefront → Eligibility and capacity engine → Pricing and scheduling → Slice provisioning (simulated; would integrate with the operator's orchestration systems) → 5G standalone core and edge → Monitoring and SLA dashboard. Also a "Security and privacy" note                                                                                                                                   |
-| `/pilot`        | 7-week plan for one NJIT campus-event pilot, success metrics with proposed targets, and a risks-and-mitigations table                                                                                                                                                                                                                                                                                                  |
+| Route           | What it shows                                                                                                                                                                                                                                                                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`             | Hero, the gap table (enterprise-led today vs. subscription), a plan for each customer type, a 5-step "How it works" (Subscribe, Check eligibility, Everyday priority, Boost when it matters, Upgrade), the four fairness rules with a worked example, and a value strip                                                                                 |
+| `/plans`        | Four illustrative plans, speed tiers (more speed), extra-hour pricing and top-ups (more time), and a "why some plans show a waitlist" note                                                                                                                                                                                                              |
+| `/subscribe`    | 4-step wizard: (1) plan; (2) eligibility: coverage on your home cell and device compatibility, with one-click fixes; (3) speed tier, extra hours, live monthly price, and seat availability; (4) review, then "Subscription active" with an account ID. Sold-out choices offer a slower tier, another cell, or the waitlist. `?plan=` preselects a plan |
+| `/account`      | Simulated subscriber dashboard: boost hours meter, start a boost at a simulated time of day (refused with the next open hour when the pool is full), one-time hour top-ups, speed upgrades, and a usage chart. A sample-account switcher covers all four plans                                                                                          |
+| `/demo`         | Crowd surge (regular network vs. a boost), KPI cards, SLA status, a subscriber table (boosting, everyday priority, waitlisted), and the density explorer                                                                                                                                                                                                |
+| `/business`     | Assumptions panel (sites, sign-up demand, churn, upgrade rate, pool cap), each input tagged "Assumption". Charts: monthly recurring revenue by plan, seats vs. demand (waitlist), revenue mix, and a trial-to-enterprise funnel. Summary: year-one revenue, revenue per subscriber, payback, subscribers and waitlist                                   |
+| `/architecture` | Storefront and account → Subscription and entitlements → Admission control → Policy engine → Slice provisioning (simulated; would integrate with the operator's orchestration systems) → 5G standalone core and edge → Monitoring and SLA dashboard, plus security and privacy                                                                          |
+| `/pilot`        | 16-week, two-cell NJIT pilot with about 60 subscribers, success metrics with proposed targets, and risks and mitigations                                                                                                                                                                                                                                |
+
+`/book` and `/catalog` from the earlier per-event version redirect to `/subscribe` and `/plans`.
 
 ## Project structure
 
 ```
-app/                         Routes (App Router). Pages are server components.
-  layout.tsx                 Header, footer, skip link, Inter font
-  loading.tsx                Route-level skeleton
-  catalog/ book/ demo/ business/ architecture/ pilot/
+app/                          Routes (App Router). Pages are server components.
 components/
-  kpi-card.tsx               KpiCard
-  chart-card.tsx             ChartCard + ChartLegend
-  step-wizard.tsx            StepWizard (step indicator, focus management)
-  eligibility-check.tsx      EligibilityCheck (pass / warn / fail list with fixes)
-  slice-badge.tsx            SliceBadge (Active / Scheduled / Guarantee met / breached)
-  simulated-tag.tsx          "Simulated network. Illustrative values." tag
-  charts/                    Chart palette + shared tooltip
-  layout/                    Header, footer, wordmark, container, page header
-  book/ demo/ business/ architecture/   Page-specific pieces
-  ui/                        Button, Select, Field, Skeleton
-hooks/use-surge-simulation.ts   Ticks the demo engine on an interval
+  kpi-card.tsx, chart-card.tsx, step-wizard.tsx, eligibility-check.tsx,
+  slice-badge.tsx, simulated-tag.tsx, plan-icon.tsx   Shared components
+  subscribe/                  Subscribe wizard, price panel, seat bar
+  account/                    Account dashboard
+  demo/                       Live surge dashboard, charts, density explorer
+  business/                   Assumptions panel, charts, dashboard
+  architecture/               Flow diagram
+  charts/ layout/ ui/         Chart theme, header/footer, primitives
+hooks/use-surge-simulation.ts Ticks the demo engine
 lib/
-  config.ts                  ALL simulated constants and assumptions (edit here)
-  simulate.ts                Pure engine: network, eligibility, pricing/capacity, business case
-  random.ts                  Seeded, stateless randomness (hash-based)
-  format.ts                  Number/currency/date formatters
+  config.ts                   ALL simulated constants and assumptions (edit here)
+  simulate.ts                 Pure engine: network, subscriptions, density, business
+  random.ts                   Seeded, stateless randomness
+  format.ts                   Formatters
 ```
-
-The booking wizard, live demo, and business dashboard are client-only and load behind skeletons via `next/dynamic`.
 
 ## Every simulated value and assumption
 
-All of these live in `lib/config.ts`. The formulas are in `lib/simulate.ts`.
+All values live in `lib/config.ts` and are illustrative.
 
-### Randomness
+### Plans
 
-Values come from hashing a fixed seed (`DEMO.seed = 5150`) with a sample index, so every run is identical. Each crowd surge is keyed to ticks since it started, so "Run surge again" replays exactly.
+| Plan           | Price/mo | Covers     | Everyday           | Boost guarantee (Standard) | Boost hours | Extra hour | Pool share |
+| -------------- | -------- | ---------- | ------------------ | -------------------------- | ----------- | ---------- | ---------- |
+| Individual     | $12      | 1 line     | Priority, no floor | 25 Mbps, ≤40 ms, 99.9%     | 5           | $1.50      | 20%        |
+| Family         | $35      | 5 lines    | Priority + 2 Mbps  | 50 Mbps, ≤40 ms, 99.9%     | 15          | $1.50      | 15%        |
+| Small business | $59      | 10 devices | Priority + 5 Mbps  | 25 Mbps, ≤30 ms, 99.99%    | 30          | $2.00      | 25%        |
+| Organization   | $149     | 25 devices | Priority + 10 Mbps | 100 Mbps, ≤20 ms, 99.9%    | 60          | $3.00      | 40%        |
 
-### Live network (`/demo`)
+- **Speed tiers:**
+  - Standard: included.
+  - Fast: 2× throughput, 5 ms lower latency, +40% of plan price.
+  - Max: 4× throughput, 10 ms lower latency, +100% of plan price.
+  - Latency never goes below 15 ms.
+- **More time:**
+  - Monthly add-on of 0–50 extra hours.
+  - One-time top-ups of 5, 10, or 25 hours.
+- **Peak concurrency** (share of subscribers boosting at once): Individual 4%, Family 6%, Small business 10%, Organization 10%.
 
-| Value                | Simulated setting                                                                                                                                                |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Load curve           | Idle 18% → smoothstep ramp to 100% over 30 s → 8 s hold → 12 s recovery (50 s total); 500 ms ticks; 60 s chart window                                            |
-| Standard latency     | 25 ms + 160 ms × load³ + jitter (SD 2 ms idle → 22 ms at peak), plus a 25–70 ms spike with probability 10% × load². Typically 160–260 ms at peak                 |
-| Standard throughput  | 120 Mbps × (1 − 0.94 × load^1.6) ± 6%, floor 6 Mbps                                                                                                              |
-| Standard packet loss | 0.1% + 5.9% × load⁴ + noise                                                                                                                                      |
-| Slice latency        | 21 ms + 4 ms × load ± 1.2 ms, clamped to 17–28 ms (guarantee ≤ 30 ms)                                                                                            |
-| Slice throughput     | 54 Mbps ± 1.2, clamped to 50.5–58 Mbps (guarantee ≥ 50 Mbps)                                                                                                     |
-| Slice packet loss    | 0.012–0.028%                                                                                                                                                     |
-| SLA status           | "Guarantee met" when latency ≤ 30 ms **and** throughput ≥ 50 Mbps; turns red ("breached") otherwise. The standard network is checked against the same thresholds |
-| Uptime               | Share of samples in the last 60 s with latency ≤ 100 ms and loss ≤ 2%                                                                                            |
-| Devices on cell      | load × 12,000                                                                                                                                                    |
-| Active slices        | 6 fictional customers (`ACTIVE_SLICES`), each kept below its own latency guarantee                                                                               |
+### Capacity and admission
 
-### Catalog packages (illustrative profiles)
+- **Pool size:** guaranteed pool = 35% of site capacity. Each plan type gets its pool share of that.
+- **Seats** = plan pool ÷ (boost Mbps × peak concurrency). A tier whose single boost exceeds the plan pool isn't offered on that cell.
+- **Seats already sold** per cell and plan = the cell's demand ± 8% seeded noise.
+- **Boost admission:**
+  - Pool in use at an hour = the cell's busy-hour boost use × hourly shape ± 8% noise.
+  - A boost is admitted only if it fits. Otherwise the next hour with room is suggested.
+- **Seven fictional campus cells** (1,200–6,000 Mbps):
+  - Athletics Stadium is busiest, and Organization seats are sold out there.
+  - Library Lower Level has no standalone 5G coverage.
+  - Student Center has partial coverage.
 
-| Package              | Throughput | Max latency | Reliability | Typical duration | Ideal customer                          |
-| -------------------- | ---------- | ----------- | ----------- | ---------------- | --------------------------------------- |
-| Event Priority       | 100 Mbps   | 20 ms       | 99.9%       | 4–10 h           | Hackathons, esports, demo days          |
-| Livestream Uplink    | 50 Mbps    | 30 ms       | 99.9%       | 2–6 h            | Student media, campus radio, broadcasts |
-| Payments Reliability | 10 Mbps    | 50 ms       | 99.99%      | 4–10 h           | Food trucks, pop-up retail, booths      |
-| Safety & Staff Comms | 30 Mbps    | 40 ms       | 99.99%      | 3–12 h           | Organizers, campus safety, staff        |
+### Eligibility
 
-Use cases map to packages: livestream → Livestream Uplink; food trucks and pop-up retail → Payments Reliability; hackathon/esports → Event Priority; safety & staff comms → Safety & Staff Comms.
+- **Coverage:** full = pass, partial = pass with a note, none = fail with a nearby-cell fix.
+- **Devices:**
+  - SA phone and SA hotspot: pass.
+  - Bonding encoder: pass with a note.
+  - Non-standalone phone, LTE phone/tablet, and LTE card reader: fail, with the fix "connect through an SA hotspot over Wi-Fi".
 
-### Eligibility (`/book`, step 2)
+### Live demo network
 
-- **Standalone 5G coverage** per venue: full (pass) for 5 venues; Student Center Ballroom is partial (pass with a note); Library Lower Level has none (fail, with "Switch to Student Center Ballroom").
-- **Device compatibility:**
-  - SA phone and SA hotspot: pass
-  - Bonding encoder: pass with a note (firmware check)
-  - Non-standalone 5G phone, LTE phone/tablet, LTE card reader: fail, with "connect through an SA hotspot over Wi-Fi"
-- Each use case preselects a typical device (for example, food trucks → LTE card reader), so the check tells a realistic story.
-- The check shows a simulated 0.9 s "Checking…" state.
+- **Load curve:** 18% idle → ramp to 100% over 30 s → 8 s hold → 12 s recovery. 500 ms ticks.
+- **Regular latency** = 25 + 160 × load³ ms, plus jitter and spikes (typically 160–260 ms at peak).
+- **Regular throughput** = 120 × (1 − 0.94 × load^1.6) Mbps, floor 6.
+- **Regular packet loss** = 0.1% + 5.9% × load⁴.
+- **Boost:** latency 17–28 ms (guarantee ≤30 ms), throughput 50.5–58 Mbps (guarantee ≥50 Mbps), loss about 0.02%.
+- **Density explorer** (surge load 95%):
+  - Priority latency = 21 + 164 × (admitted share × load)³ ms.
+  - Regular latency rises 35% × admitted share.
+  - With admission control, the admitted share is capped at 35%.
 
-### Pricing
+### Business case
 
-`price per hour = base rate × demand multiplier × profile multiplier`, summed over each hour. Minimum charge $15.
+Editable assumptions (defaults): sites **25**, sign-ups wanted per site per month **45**, monthly churn **3%**, upgrade rate **25%**, guaranteed pool cap **35%**.
 
-- **Base rate:** $40/hr for the reference profile (50 Mbps, 30 ms, 99.9%).
-- **Demand multiplier** = time band × weekend × scarcity:
-  - Time bands: off-peak ×0.7 (10 PM–7 AM), standard ×1.0 (7 AM–4 PM), peak ×1.5 (4–10 PM)
-  - Weekend: ×1.15
-  - Scarcity: × (1 + 0.8 × max(0, reserved − 60%))
-- **Profile multiplier** = (Mbps / 50)^0.7 × (30 / ms)^0.4 × reliability factor (99% → 0.85, 99.9% → 1.0, 99.99% → 1.4).
-- **Cheaper-time tip:** nearest same-day start that fits capacity and saves at least 10%.
+Scenario presets (one-click buttons on the page; `PRESETS` in `lib/config.ts`):
 
-### Capacity
+| Preset                         | Sites   | Sign-ups/site/mo | Churn | Upgrade rate | Pool cap | Year-one revenue | Payback   |
+| ------------------------------ | ------- | ---------------- | ----- | ------------ | -------- | ---------------- | --------- |
+| NJIT realistic                 | 10      | 10               | 5%    | 15%          | 20%      | ~$162K           | 41 months |
+| NJIT optimistic                | 10      | 20               | 4%    | 20%          | 25%      | ~$339K           | 23 months |
+| Regional rollout (~8 campuses) | 80      | 10               | 5%    | 15%          | 20%      | ~$1.3M           | 16 months |
+| Nationwide (USA)               | 100,000 | 5                | 5%    | 15%          | 20%      | ~$808M           | 18 months |
+| Aggressive (original defaults) | 25      | 45               | 3%    | 25%          | 35%      | ~$2.0M           | 11 months |
 
-- 7 fictional campus venues with sliceable capacity of 300–1,500 Mbps and a busy-hour reserved share of 30–72%.
-- **Existing reservations** per hour = busy-hour share × hourly shape curve × 1.12 on weekends ± 6% seeded noise.
-- **Blocked** if any hour in the window would exceed **85%** reserved. The UI then suggests the nearest same-day window that fits, or the largest throughput that fits.
-
-### Business case (`/business`)
-
-Editable assumptions (defaults):
-
-| Assumption                                    | Default |
-| --------------------------------------------- | ------- |
-| Price per slice-hour (standard rate)          | $55     |
-| Bookings per site per month                   | 40      |
-| Number of sites                               | 25      |
-| Off-peak share (booked hours outside 4–10 PM) | 70%     |
-| Hours per booking                             | 4       |
+The nationwide preset's 100,000 sites is an assumption standing in for "every site with standalone 5G in the US". It isn't a real network count. At 5 sign-ups per site per month it reaches about 3.1M subscribers, roughly 1% of the US population. The sites slider is logarithmic so it covers 1 to 100,000.
 
 Fixed assumptions:
 
-| Assumption                   | Value                                                                                                                                         |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Off-peak discount            | 30% → effective price = price × (1 − off-peak share × 0.3)                                                                                    |
-| Off-peak demand uplift       | bookings × (1 + 0.5 × off-peak share)                                                                                                         |
-| Adoption ramp                | 25% of steady state in month 1 → 100% by month 12                                                                                             |
-| Platform build (one-time)    | $600,000                                                                                                                                      |
-| Onboarding per site          | $12,000                                                                                                                                       |
-| Operating cost               | 30% of revenue                                                                                                                                |
-| Booking mix                  | Livestream 30%, food trucks 20%, esports 15%, pop-up retail 15%, safety & staff comms 20%                                                     |
-| Avg slice size               | 12% of a site's capacity                                                                                                                      |
-| Baseline utilization by hour | 24-hour curve, 10% overnight → 82% at 7 PM; cap 90%                                                                                           |
-| Funnel                       | 2.5 bookings per customer per year; 45% repeat; 35% of repeaters become recurring or multi-site; 25% of those become enterprise upgrade leads |
+| Assumption           | Value                                                            |
+| -------------------- | ---------------------------------------------------------------- |
+| Sign-up mix          | Individual 45%, Family 20%, Small business 20%, Organization 15% |
+| Adoption ramp        | 25% of demand in month 1 → 100% by month 12                      |
+| Seats per site       | Sized on an average 3,000 Mbps site at Standard speed            |
+| Upgrade spend        | 45% of base price per upgraded subscriber (60% speed, 40% time)  |
+| Platform build       | $600,000 one-time                                                |
+| Onboarding per site  | $12,000                                                          |
+| Operating cost       | 30% of revenue                                                   |
+| Trial to paid        | 60%                                                              |
+| Enterprise referrals | 12% of Organization and Small business subscribers               |
 
-Derived outputs:
+**How the projection works:**
 
-- **Revenue** = bookings × hours × effective price.
-- **Payback** = first month where cumulative net (revenue × 70% − up-front cost) is ≥ 0. If that's past month 12, it's extrapolated at the month-12 run rate.
-- **Revenue by use case** = booking mix × the package's profile multiplier × typical hours.
-- **Utilization after:** slice-hours are split by the off-peak share between peak and non-peak hours, then weighted by event demand × cell headroom.
-- **Funnel** stages are computed from annual bookings.
+- Each month, retained subscribers = previous × (1 − churn).
+- New sign-ups are admitted up to the plan's seats. The rest join the waitlist.
+- Revenue = subscribers × price × (1 + upgrade rate × upgrade spend).
+- Payback = first month where cumulative net (revenue × 70% − up-front cost) is ≥ 0.
 
-At the defaults, the model gives about **$1.76M** year-one revenue, a **+3.6 pts** average utilization lift, **10-month** payback, and **160** enterprise upgrade leads a year. All of these are simulated.
+**Results at the defaults:**
 
-### Pilot plan (`/pilot`)
+- About **$2.0M** year-one revenue and a **$4.4M** annual run rate by month 12.
+- **$51** per subscriber per month.
+- **11-month** payback.
+- About **7,200** subscribers, with about **280** waitlisted (Family and Organization fill first).
 
-The pilot targets (for example, p95 latency ≤ 30 ms, booking-to-activation under 15 minutes, organizer satisfaction ≥ 4.5/5) are **proposed targets**, not results.
+All of these are simulated.
+
+### Pilot
+
+All pilot targets are proposed (for example, a boost guarantee hit rate of at least 99.9%, regular users no more than 10% slower at peak, and a 20% upgrade rate). None are results.
 
 ## Content rules followed
 
-- No claims of real network access. Provisioning is labeled simulated everywhere it appears.
-- No statistics about real companies. The "Today" column on the landing page describes enterprise-led buying in general terms.
-- Packages are labeled "Illustrative profile", scenarios "Illustrative scenario", and every business input "Assumption".
+- No claims of real network access. Provisioning is labeled simulated.
+- No statistics about real companies. The "Today" column describes enterprise-led buying in general terms.
+- Plans are labeled "Illustrative plan", scenarios "Illustrative scenario", and every business input "Assumption".
 
 ## Design notes
 
-- Verizon-inspired palette: red `#EE0000` (CTAs, key metrics, the slice series), black, white, and grays `#F6F6F6` / `#D8DADA` / `#747676`. Green and amber are used only for status.
-  - Small muted text uses `#626464` so it passes WCAG AA on light gray.
-  - The 5-color donut palette was checked for colorblind separation and always has direct labels.
-- No Verizon logo, just a text wordmark with a "Concept demo" tag.
-- Charts: labeled axes with units, tooltips, legends, and an `aria-label` summary on each.
-- Accessibility:
-  - Skip link, visible focus rings, native form controls, and `aria-current` in the nav and wizard
-  - Status always shows an icon plus text
-  - Live regions for eligibility results and quotes
-  - Reduced-motion preferences are respected
+- **Palette:** Verizon-inspired: red `#EE0000` for CTAs, key metrics, and the boost series; black; white; grays `#F6F6F6` / `#D8DADA` / `#747676`. Green and amber are used only for status.
+- **Branding:** no Verizon logo; a "Priority 5G" text wordmark with a "Concept demo" tag.
+- **Charts:** labeled axes with units, tooltips, legends, `aria-label` summaries, and a fixed color per plan.
+- **Accessibility:** skip link, visible focus, native controls, `aria-current` in the nav and wizard, status always shown as icon plus text, and reduced-motion support.

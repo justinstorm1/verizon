@@ -1,33 +1,35 @@
 /**
- * SliceLive simulation engine.
+ * Priority 5G simulation engine.
  *
- * Pure, deterministic functions for the three simulated systems behind the demo:
- *  1. Live network: standard network vs. a guaranteed slice under a crowd surge
- *  2. Booking: demand-based pricing and a per-site capacity check
- *  3. Business case: 12-month projection, revenue mix, and utilization lift
+ * Pure, deterministic functions for the simulated systems behind the demo:
+ *  1. Live network: regular network vs. a guaranteed priority slice under a crowd surge
+ *  2. Subscriptions: plan pricing, eligibility, per-cell seat limits, boost admission
+ *  3. Density: what happens to priority when more and more people subscribe
+ *  4. Business case: 12-month subscription projection
  *
  * Constants live in ./config.ts. Randomness is seeded (./random.ts), so every
  * run renders the same story.
  */
 
 import {
-  ACTIVE_SLICES,
-  BOOKING,
+  ACTIVE_SUBSCRIBERS,
   BUSINESS,
-  DEVICE_TYPES,
   CAPACITY,
+  CELLS,
   DEMO,
-  PRICING,
-  USE_CASE_ORDER,
-  USE_CASES,
-  VENUES,
+  DENSITY,
+  DEVICE_TYPES,
+  MIN_LATENCY_MS,
+  PLAN_ORDER,
+  PLANS,
+  SPEED_TIERS,
   type BusinessAssumptions,
-  type DemandBandId,
+  type Cell,
   type DeviceType,
   type DeviceTypeId,
-  type SliceProfile,
-  type UseCaseId,
-  type Venue,
+  type PlanId,
+  type SpeedTierId,
+  type SubscriberStatus,
 } from "./config"
 import { clamp, gaussian, hashString, noise } from "./random"
 
@@ -35,9 +37,6 @@ const smoothstep = (x: number) => {
   const t = clamp(x, 0, 1)
   return t * t * (3 - 2 * t)
 }
-
-const mean = (values: number[]) =>
-  values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0
 
 // ===========================================================================
 // 1. Live network simulation
@@ -167,38 +166,45 @@ export function meetsGuarantee(latencyMs: number, throughputMbps: number) {
   )
 }
 
-export interface ActiveSliceRow {
+export interface SubscriberRow {
   id: string
-  customer: string
-  useCase: UseCaseId
-  venue: string
-  status: "active" | "scheduled"
+  name: string
+  plan: PlanId
+  cell: string
+  status: SubscriberStatus
   guaranteeLatencyMs: number
+  /** Current latency; null while waitlisted */
   latencyMs: number | null
 }
 
-export function sampleActiveSlices(
-  load: number,
-  key: number
-): ActiveSliceRow[] {
-  return ACTIVE_SLICES.map((s, i) => ({
-    id: s.id,
-    customer: s.customer,
-    useCase: s.useCase,
-    venue: s.venue,
-    status: s.status,
-    guaranteeLatencyMs: s.guaranteeLatencyMs,
-    latencyMs:
-      s.status === "active"
-        ? clamp(
-            s.typicalLatencyMs +
-              2.5 * load +
-              0.9 * gaussian(DEMO.seed, key, 100 + i),
-            s.typicalLatencyMs - 3,
-            s.guaranteeLatencyMs - 1
-          )
-        : null,
-  }))
+/** Live rows for the subscriber table. Boosting rows stay inside their guarantee. */
+export function sampleSubscribers(load: number, key: number): SubscriberRow[] {
+  return ACTIVE_SUBSCRIBERS.map((s, i) => {
+    const jitter = gaussian(DEMO.seed, key, 100 + i)
+    let latencyMs: number | null = null
+    if (s.status === "boosting") {
+      latencyMs = clamp(
+        s.typicalLatencyMs + 2.5 * load + 0.9 * jitter,
+        s.typicalLatencyMs - 3,
+        s.guaranteeLatencyMs - 1
+      )
+    } else if (s.status === "priority") {
+      // Everyday priority: ahead of regular traffic, but not guaranteed.
+      latencyMs = Math.max(
+        12,
+        s.typicalLatencyMs + 14 * load ** 2 + 1.5 * jitter
+      )
+    }
+    return {
+      id: s.id,
+      name: s.name,
+      plan: s.plan,
+      cell: s.cell,
+      status: s.status,
+      guaranteeLatencyMs: s.guaranteeLatencyMs,
+      latencyMs,
+    }
+  })
 }
 
 export interface SurgeSummary {
@@ -215,7 +221,7 @@ export interface DemoState {
   surgeStartTick: number | null
   phase: SurgePhase
   samples: NetworkSample[]
-  slices: ActiveSliceRow[]
+  subscribers: SubscriberRow[]
   summary: SurgeSummary | null
   /** Timeline seconds the most recent surge started and ended (end null while running) */
   surgeWindow: { start: number; end: number | null } | null
@@ -280,7 +286,7 @@ export function advanceDemo(state: DemoState): DemoState {
     surgeStartTick: phase === "complete" ? null : state.surgeStartTick,
     phase: phase === "idle" && state.phase === "complete" ? "complete" : phase,
     samples,
-    slices: sampleActiveSlices(load, key),
+    subscribers: sampleSubscribers(load, key),
     summary:
       surging && state.summary
         ? addToSummary(state.summary, sample)
@@ -309,7 +315,7 @@ export function initialDemoState(): DemoState {
     surgeStartTick: null,
     phase: "idle",
     samples: [],
-    slices: sampleActiveSlices(DEMO.idleLoad, 0),
+    subscribers: sampleSubscribers(DEMO.idleLoad, 0),
     summary: null,
     surgeWindow: null,
   }
@@ -334,184 +340,110 @@ export function uptime(samples: NetworkSample[]) {
 }
 
 // ===========================================================================
-// 2. Booking: pricing & capacity
+// 2. Subscriptions: pricing, eligibility, seats, boosts
 // ===========================================================================
 
-export function getVenue(id: string): Venue {
-  return VENUES.find((v) => v.id === id) ?? VENUES[0]
+export function getCell(id: string): Cell {
+  return CELLS.find((c) => c.id === id) ?? CELLS[0]
 }
 
-/** Day of week (0 = Sunday) for an ISO date, independent of time zone */
-export function weekdayOf(dateISO: string) {
-  const [y, m, d] = dateISO.split("-").map(Number)
-  return new Date(Date.UTC(y, (m || 1) - 1, d || 1)).getUTCDay()
+export function getDevice(id: DeviceTypeId): DeviceType {
+  return DEVICE_TYPES.find((d) => d.id === id) ?? DEVICE_TYPES[0]
 }
 
-export function isWeekend(dateISO: string) {
-  const day = weekdayOf(dateISO)
-  return day === 0 || day === 6
+export function hourLabel(hour: number) {
+  const h = ((Math.round(hour) % 24) + 24) % 24
+  const suffix = h < 12 ? "AM" : "PM"
+  const display = h % 12 === 0 ? 12 : h % 12
+  return `${display} ${suffix}`
 }
 
-export function demandBand(hour: number): DemandBandId {
-  const h = ((hour % 24) + 24) % 24
-  if (h >= PRICING.peakHours[0] && h < PRICING.peakHours[1]) return "peak"
-  if (h >= PRICING.standardHours[0] && h < PRICING.standardHours[1])
-    return "standard"
-  return "off-peak"
+export interface Subscription {
+  plan: PlanId
+  speed: SpeedTierId
+  /** Extra boost hours added to every month */
+  extraHours: number
+  cellId: string
 }
 
-/** Share (0-1) of a site's sliceable capacity already reserved by other customers */
-export function existingReserved(venue: Venue, dateISO: string, hour: number) {
-  const weekend = isWeekend(dateISO) ? CAPACITY.weekendFactor : 1
-  const base = venue.busyHourReserved * CAPACITY.hourShape[hour % 24] * weekend
-  const jitter =
-    (noise(hashString(`${venue.id}|${dateISO}`), hour) - 0.5) *
-    2 *
-    CAPACITY.noise
-  return clamp(base + jitter, 0.02, 0.92)
-}
-
-/** Price multiplier for a slice profile relative to the reference profile */
-export function profileMultiplier(profile: SliceProfile) {
-  const ref = PRICING.reference
-  return (
-    (profile.throughputMbps / ref.throughputMbps) **
-      PRICING.throughputExponent *
-    (ref.maxLatencyMs / profile.maxLatencyMs) ** PRICING.latencyExponent *
-    PRICING.reliabilityMultiplier[profile.reliability]
-  )
-}
-
-/** Demand multiplier for one hour: time-of-day band x weekend x scarcity */
-export function demandMultiplier(
-  hour: number,
-  dateISO: string,
-  reserved: number
-) {
-  const band = PRICING.demandBands[demandBand(hour)].multiplier
-  const weekend = isWeekend(dateISO) ? PRICING.weekendMultiplier : 1
-  const scarcity =
-    1 +
-    PRICING.scarcitySlope * Math.max(0, reserved - PRICING.scarcityThreshold)
-  return band * weekend * scarcity
-}
-
-export interface BookingRequest {
-  venueId: string
-  dateISO: string
-  startHour: number
-  durationHours: number
-  useCase: UseCaseId
-  profile: SliceProfile
-}
-
-export interface HourQuote {
-  hour: number
-  band: DemandBandId
-  demandMultiplier: number
-  existingReserved: number
-  totalReserved: number
-  price: number
-}
-
-export interface Quote {
-  hours: HourQuote[]
-  profileMultiplier: number
-  avgDemandMultiplier: number
-  subtotal: number
-  total: number
-  /** Share of capacity this request needs on its own */
-  requestShare: number
-  /** Busiest-hour reservation before and after this booking */
-  peakExisting: number
-  peakTotal: number
-  oversold: boolean
-  /** Largest throughput that would still fit in every hour of the window */
-  maxThroughputMbps: number
-}
-
-export function quoteBooking(req: BookingRequest): Quote {
-  const venue = getVenue(req.venueId)
-  const pMult = profileMultiplier(req.profile)
-  const requestShare = req.profile.throughputMbps / venue.sliceableCapacityMbps
-
-  const hours: HourQuote[] = []
-  for (let i = 0; i < req.durationHours; i++) {
-    const hour = req.startHour + i
-    const reserved = existingReserved(venue, req.dateISO, hour)
-    const dMult = demandMultiplier(hour, req.dateISO, reserved)
-    hours.push({
-      hour,
-      band: demandBand(hour),
-      demandMultiplier: dMult,
-      existingReserved: reserved,
-      totalReserved: reserved + requestShare,
-      price: PRICING.baseHourlyRate * dMult * pMult,
-    })
-  }
-
-  const subtotal = hours.reduce((sum, h) => sum + h.price, 0)
-  const peakExisting = Math.max(...hours.map((h) => h.existingReserved))
-  const peakTotal = peakExisting + requestShare
-  const step = 5
-  const maxThroughputMbps = Math.max(
-    0,
-    Math.floor(
-      ((CAPACITY.maxReservable - peakExisting) * venue.sliceableCapacityMbps) /
-        step
-    ) * step
-  )
-
+/** The guarantee a subscriber gets while boosting */
+export function boostProfile(plan: PlanId, speed: SpeedTierId) {
+  const p = PLANS[plan]
+  const t = SPEED_TIERS[speed]
   return {
-    hours,
-    profileMultiplier: pMult,
-    avgDemandMultiplier: mean(hours.map((h) => h.demandMultiplier)),
-    subtotal,
-    total: Math.max(PRICING.minimumCharge, subtotal),
-    requestShare,
-    peakExisting,
-    peakTotal,
-    oversold: peakTotal > CAPACITY.maxReservable + 1e-9,
-    maxThroughputMbps,
+    throughputMbps: p.boost.throughputMbps * t.throughputMultiplier,
+    maxLatencyMs: Math.max(
+      MIN_LATENCY_MS,
+      p.boost.maxLatencyMs - t.latencyReductionMs
+    ),
+    reliability: p.boost.reliability,
   }
 }
 
-/** Nearest start time on the same day (same duration) that fits and saves at least 10% */
-export function cheaperAlternative(req: BookingRequest, current: Quote) {
-  let best: { startHour: number; total: number; savingsPct: number } | null =
-    null
-  const lastStart = BOOKING.latestEndHour - req.durationHours
-  for (let s = BOOKING.earliestStartHour; s <= lastStart; s++) {
-    if (s === req.startHour) continue
-    const q = quoteBooking({ ...req, startHour: s })
-    if (q.oversold) continue
-    const savingsPct = 1 - q.total / current.total
-    const closer =
-      !best ||
-      Math.abs(s - req.startHour) < Math.abs(best.startHour - req.startHour)
-    if (savingsPct >= 0.1 && closer) {
-      best = { startHour: s, total: q.total, savingsPct }
-    }
-  }
-  return best
+export interface MonthlyPrice {
+  base: number
+  speedUpgrade: number
+  extraHours: number
+  total: number
+  boostHours: number
 }
 
-/** Nearest start time on the same day (same duration) that doesn't oversell the site */
-export function availableAlternative(req: BookingRequest) {
-  let best: { startHour: number; total: number } | null = null
-  const lastStart = BOOKING.latestEndHour - req.durationHours
-  for (let s = BOOKING.earliestStartHour; s <= lastStart; s++) {
-    if (s === req.startHour) continue
-    const q = quoteBooking({ ...req, startHour: s })
-    if (q.oversold) continue
-    if (
-      !best ||
-      Math.abs(s - req.startHour) < Math.abs(best.startHour - req.startHour)
-    ) {
-      best = { startHour: s, total: q.total }
-    }
+export function monthlyPrice(
+  sub: Pick<Subscription, "plan" | "speed" | "extraHours">
+): MonthlyPrice {
+  const p = PLANS[sub.plan]
+  const speedUpgrade = p.price * SPEED_TIERS[sub.speed].priceUplift
+  const extraHours = sub.extraHours * p.extraHourPrice
+  return {
+    base: p.price,
+    speedUpgrade,
+    extraHours,
+    total: p.price + speedUpgrade + extraHours,
+    boostHours: p.boostHours + sub.extraHours,
   }
-  return best
+}
+
+/** Mbps of guaranteed pool one subscription needs at peak (expected concurrency x boost) */
+export function seatLoadMbps(plan: PlanId, speed: SpeedTierId) {
+  return boostProfile(plan, speed).throughputMbps * PLANS[plan].peakConcurrency
+}
+
+/** Guaranteed pool (Mbps) for one segment on one cell */
+export function segmentPoolMbps(
+  capacityMbps: number,
+  plan: PlanId,
+  poolCap = CAPACITY.guaranteedPoolCap
+) {
+  return capacityMbps * poolCap * PLANS[plan].poolShare
+}
+
+export interface SeatAvailability {
+  /** Seats this plan and speed would have on an empty cell */
+  total: number
+  /** Seats still open */
+  open: number
+  /** Share of this segment's pool already sold, 0-1+ */
+  soldShare: number
+  soldOut: boolean
+}
+
+/** Admission control: how many more subscriptions of this plan and speed a cell can take */
+export function seatAvailability(
+  sub: Pick<Subscription, "plan" | "speed" | "cellId">
+): SeatAvailability {
+  const cell = getCell(sub.cellId)
+  const pool = segmentPoolMbps(cell.capacityMbps, sub.plan)
+  const load = seatLoadMbps(sub.plan, sub.speed)
+  const jitter =
+    (noise(hashString(`${cell.id}|${sub.plan}`)) - 0.5) * 2 * CAPACITY.noise
+  const soldShare = clamp(cell.demand + jitter, 0, 1.1)
+  // A tier whose single boost is bigger than the whole pool can't be offered here.
+  const offered = boostProfile(sub.plan, sub.speed).throughputMbps <= pool
+  const total = offered ? Math.floor(pool / load) : 0
+  const open = offered
+    ? Math.max(0, Math.floor((pool * (1 - soldShare)) / load))
+    : 0
+  return { total, open, soldShare, soldOut: open === 0 }
 }
 
 export type CheckStatus = "pass" | "warn" | "fail"
@@ -522,33 +454,29 @@ export interface EligibilityResult {
   status: CheckStatus
   detail: string
   /** A concrete way forward when the check fails */
-  fix?: { label: string; venueId?: string; deviceId?: DeviceTypeId }
+  fix?: { label: string; cellId?: string; deviceId?: DeviceTypeId }
 }
 
-/** Simulated eligibility checks for a venue and device type */
+/** Simulated eligibility checks for a home cell and device type */
 export function checkEligibility(
-  venueId: string,
+  cellId: string,
   deviceId: DeviceTypeId
 ): EligibilityResult[] {
-  const venue = getVenue(venueId)
+  const cell = getCell(cellId)
   const device = getDevice(deviceId)
-  const alt = venue.alternativeVenueId
-    ? getVenue(venue.alternativeVenueId)
-    : null
+  const alt = cell.alternativeCellId ? getCell(cell.alternativeCellId) : null
   return [
     {
       id: "coverage",
-      title: "Standalone 5G coverage at this site",
+      title: "Standalone 5G coverage where you'll use it",
       status:
-        venue.saCoverage === "full"
+        cell.saCoverage === "full"
           ? "pass"
-          : venue.saCoverage === "partial"
+          : cell.saCoverage === "partial"
             ? "warn"
             : "fail",
-      detail: venue.coverageNote,
-      fix: alt
-        ? { label: `Switch to ${alt.name}`, venueId: alt.id }
-        : undefined,
+      detail: cell.coverageNote,
+      fix: alt ? { label: `Switch to ${alt.name}`, cellId: alt.id } : undefined,
     },
     {
       id: "device",
@@ -563,65 +491,133 @@ export function checkEligibility(
   ]
 }
 
-export function getDevice(id: DeviceTypeId): DeviceType {
-  return DEVICE_TYPES.find((d) => d.id === id) ?? DEVICE_TYPES[0]
+/** Share (0-1+) of a segment's guaranteed pool in use by boosts at a given hour */
+export function boostPoolInUse(cellId: string, plan: PlanId, hour: number) {
+  const cell = getCell(cellId)
+  const h = ((Math.floor(hour) % 24) + 24) % 24
+  const jitter =
+    (noise(hashString(`${cell.id}|boost|${plan}`), h) - 0.5) *
+    2 *
+    CAPACITY.noise
+  return clamp(cell.busyHourBoostUse * CAPACITY.hourShape[h] + jitter, 0, 1.1)
 }
 
-export function bookingReference(req: BookingRequest) {
-  const h = hashString(JSON.stringify(req)).toString(36).toUpperCase()
-  return `SL-${h.slice(0, 6).padEnd(6, "0")}`
+export interface BoostDecision {
+  admitted: boolean
+  /** Pool in use before this boost, and after if admitted (0-1+) */
+  inUse: number
+  withBoost: number
+  /** Next hour today with room, when refused */
+  nextHour: number | null
+}
+
+/**
+ * Boost admission: a boost starts only if the segment's pool has room for it.
+ * Otherwise it is refused with the next available hour. It is never started degraded.
+ */
+export function requestBoost(
+  sub: Pick<Subscription, "plan" | "speed" | "cellId">,
+  hour: number
+): BoostDecision {
+  const cell = getCell(sub.cellId)
+  const pool = segmentPoolMbps(cell.capacityMbps, sub.plan)
+  const share = boostProfile(sub.plan, sub.speed).throughputMbps / pool
+  const fits = (h: number) =>
+    boostPoolInUse(sub.cellId, sub.plan, h) + share <= 1
+  const inUse = boostPoolInUse(sub.cellId, sub.plan, hour)
+  let nextHour: number | null = null
+  if (!fits(hour)) {
+    for (let h = Math.floor(hour) + 1; h < 24; h++) {
+      if (fits(h)) {
+        nextHour = h
+        break
+      }
+    }
+  }
+  return { admitted: fits(hour), inUse, withBoost: inUse + share, nextHour }
+}
+
+export function accountReference(seed: string) {
+  const h = hashString(seed).toString(36).toUpperCase()
+  return `P5-${h.slice(0, 6).padEnd(6, "0")}`
 }
 
 // ===========================================================================
-// 3. Business case
+// 3. Density: "if everyone subscribes, isn't it just normal 5G?"
+// ===========================================================================
+
+export interface DensityPoint {
+  /** Share of devices subscribed, 0-100 */
+  subscribed: number
+  /** Share actually admitted to priority, 0-100 */
+  admitted: number
+  priorityLatency: number
+  standardLatency: number
+}
+
+/**
+ * Latency for priority and regular users during a surge, as the share of
+ * subscribed devices grows. With admission control, priority load is capped
+ * at the guaranteed pool; extra subscribers wait for a seat instead of
+ * diluting everyone else's guarantee.
+ */
+export function densityPoint(
+  subscribedShare: number,
+  admissionControl: boolean,
+  poolCap = CAPACITY.guaranteedPoolCap
+): DensityPoint {
+  const L = DENSITY.surgeLoad
+  const admitted = admissionControl
+    ? Math.min(subscribedShare, poolCap)
+    : subscribedShare
+  const priorityLoad = admitted * L
+  const priorityLatency =
+    DENSITY.priorityBaseMs + DENSITY.prioritySpanMs * priorityLoad ** 3
+  const standardBase =
+    DEMO.standard.baseLatencyMs +
+    (DEMO.standard.peakLatencyMs - DEMO.standard.baseLatencyMs) * L ** 3
+  const standardLatency =
+    standardBase * (1 + DENSITY.standardPenalty * admitted)
+  return {
+    subscribed: subscribedShare * 100,
+    admitted: admitted * 100,
+    priorityLatency,
+    standardLatency: Math.max(priorityLatency, standardLatency),
+  }
+}
+
+export function densityCurve(
+  admissionControl: boolean,
+  poolCap = CAPACITY.guaranteedPoolCap
+) {
+  return Array.from({ length: 21 }, (_, i) =>
+    densityPoint(i / 20, admissionControl, poolCap)
+  )
+}
+
+// ===========================================================================
+// 4. Business case
 // ===========================================================================
 
 export interface MonthProjection {
   month: number
   label: string
-  bookings: number
-  revenue: number
+  subscribers: Record<PlanId, number>
+  totalSubscribers: number
+  revenue: Record<PlanId, number>
+  totalRevenue: number
   cumulativeNet: number
 }
 
-export interface UseCaseRevenue {
-  id: UseCaseId
+export interface SegmentCapacity {
+  plan: PlanId
   label: string
-  value: number
-  share: number
-}
-
-export interface UtilizationPoint {
-  hour: number
-  label: string
-  before: number
-  after: number
-}
-
-export interface BusinessProjection {
-  months: MonthProjection[]
-  annualRevenue: number
-  annualBookings: number
-  upfrontCost: number
-  steadyStateMonthlyRevenue: number
-  effectivePrice: number
-  paybackMonths: number | null
-  revenueByUseCase: UseCaseRevenue[]
-  utilization: UtilizationPoint[]
-  avgUtilizationBefore: number
-  avgUtilizationAfter: number
-  utilizationLiftPts: number
-  utilizationLiftPct: number
-  nonPeakLiftPts: number
-  peakLiftPts: number
-  funnel: FunnelStage[]
-}
-
-export function hourLabel(hour: number) {
-  const h = ((hour % 24) + 24) % 24
-  const suffix = h < 12 ? "AM" : "PM"
-  const display = h % 12 === 0 ? 12 : h % 12
-  return `${display} ${suffix}`
+  /** Seats across all sites (subscribers the guaranteed pool can hold) */
+  seats: number
+  /** Subscribers at month 12 */
+  subscribers: number
+  /** Demand turned away to the waitlist by month 12 */
+  waitlist: number
 }
 
 export interface FunnelStage {
@@ -630,25 +626,55 @@ export interface FunnelStage {
   customers: number
 }
 
-/** Monthly bookings per site once off-peak discounts attract extra demand */
-export function effectiveBookingsPerSite(a: BusinessAssumptions) {
-  return (
-    a.bookingsPerSitePerMonth *
-    (1 + a.offPeakShare * BUSINESS.offPeakDemandUplift)
-  )
+export interface BusinessProjection {
+  months: MonthProjection[]
+  yearOneRevenue: number
+  /** Month-12 recurring revenue x 12 */
+  exitArr: number
+  /** Average revenue per subscriber per month at month 12 */
+  arpu: number
+  upfrontCost: number
+  paybackMonths: number | null
+  revenueMix: {
+    id: "base" | "speed" | "time"
+    label: string
+    value: number
+    share: number
+  }[]
+  capacity: SegmentCapacity[]
+  subscribersAtExit: number
+  waitlistAtExit: number
+  funnel: FunnelStage[]
 }
 
-/** Effective price per hour once off-peak discounts are applied */
-export function effectiveHourlyPrice(a: BusinessAssumptions) {
-  return a.pricePerHour * (1 - a.offPeakShare * BUSINESS.offPeakDiscount)
+/** Subscription seats per site for each plan (Standard speed, average cell) */
+export function seatsPerSite(plan: PlanId, poolCap: number) {
+  return Math.floor(
+    segmentPoolMbps(BUSINESS.avgCellCapacityMbps, plan, poolCap) /
+      seatLoadMbps(plan, "standard")
+  )
 }
 
 export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
   const upfrontCost =
     BUSINESS.platformCost + BUSINESS.perSiteCost * a.numberOfSites
   const netShare = 1 - BUSINESS.operatingCostShare
-  const price = effectiveHourlyPrice(a)
-  const bookingsPerSite = effectiveBookingsPerSite(a)
+  const upgradeFactor = 1 + a.upgradeRate * BUSINESS.upgradeSpendShare
+
+  const seats = Object.fromEntries(
+    PLAN_ORDER.map((id) => [
+      id,
+      seatsPerSite(id, a.guaranteedPoolCap) * a.numberOfSites,
+    ])
+  ) as Record<PlanId, number>
+  const subs = Object.fromEntries(PLAN_ORDER.map((id) => [id, 0])) as Record<
+    PlanId,
+    number
+  >
+  const waitlist = Object.fromEntries(
+    PLAN_ORDER.map((id) => [id, 0])
+  ) as Record<PlanId, number>
+  let totalSignups = 0
 
   let cumulative = -upfrontCost
   const months: MonthProjection[] = []
@@ -656,138 +682,114 @@ export function projectBusiness(a: BusinessAssumptions): BusinessProjection {
     const adoption =
       BUSINESS.adoptionStart +
       (1 - BUSINESS.adoptionStart) * smoothstep((m - 1) / (BUSINESS.months - 1))
-    const bookings = Math.round(bookingsPerSite * a.numberOfSites * adoption)
-    const revenue = bookings * a.hoursPerBooking * price
-    cumulative += revenue * netShare
+    const revenue = {} as Record<PlanId, number>
+    for (const id of PLAN_ORDER) {
+      const demand =
+        a.signupsPerSitePerMonth *
+        a.numberOfSites *
+        adoption *
+        BUSINESS.signupMix[id]
+      const retained = subs[id] * (1 - a.monthlyChurn)
+      const room = Math.max(0, seats[id] - retained)
+      const admitted = Math.min(demand, room)
+      subs[id] = retained + admitted
+      waitlist[id] += demand - admitted
+      totalSignups += admitted
+      revenue[id] = subs[id] * PLANS[id].price * upgradeFactor
+    }
+    const totalRevenue = PLAN_ORDER.reduce((s, id) => s + revenue[id], 0)
+    cumulative += totalRevenue * netShare
     months.push({
       month: m,
       label: `M${m}`,
-      bookings,
+      subscribers: Object.fromEntries(
+        PLAN_ORDER.map((id) => [id, Math.round(subs[id])])
+      ) as Record<PlanId, number>,
+      totalSubscribers: Math.round(
+        PLAN_ORDER.reduce((s, id) => s + subs[id], 0)
+      ),
       revenue,
+      totalRevenue,
       cumulativeNet: cumulative,
     })
   }
 
-  const annualRevenue = months.reduce((s, m) => s + m.revenue, 0)
-  const annualBookings = months.reduce((s, m) => s + m.bookings, 0)
-  const steadyStateMonthlyRevenue =
-    bookingsPerSite * a.numberOfSites * a.hoursPerBooking * price
+  const last = months[months.length - 1]
+  const yearOneRevenue = months.reduce((s, m) => s + m.totalRevenue, 0)
 
-  // Payback: first month cumulative net turns positive, extrapolated past month 12.
   let paybackMonths: number | null = null
   const hit = months.find((m) => m.cumulativeNet >= 0)
-  if (hit) {
-    paybackMonths = hit.month
-  } else {
-    const lastNet = months[months.length - 1].revenue * netShare
+  if (hit) paybackMonths = hit.month
+  else {
+    const lastNet = last.totalRevenue * netShare
     if (lastNet > 0)
       paybackMonths = BUSINESS.months + Math.ceil(-cumulative / lastNet)
   }
 
-  // Revenue mix: booking share weighted by each use case's relative price and length.
-  const weights = USE_CASE_ORDER.map((id) => {
-    const uc = USE_CASES[id]
-    return (
-      BUSINESS.useCaseMix[id] *
-      profileMultiplier(uc.recommended) *
-      uc.typicalHours
-    )
-  })
-  const totalWeight = weights.reduce((s, w) => s + w, 0)
-  const revenueByUseCase = USE_CASE_ORDER.map((id, i) => ({
-    id,
-    label: USE_CASES[id].label,
-    share: weights[i] / totalWeight,
-    value: (annualRevenue * weights[i]) / totalWeight,
+  const upgradeShare = (upgradeFactor - 1) / upgradeFactor
+  const baseRevenue = yearOneRevenue * (1 - upgradeShare)
+  const upgradeRevenue = yearOneRevenue * upgradeShare
+  const revenueMix = [
+    { id: "base" as const, label: "Base subscriptions", value: baseRevenue },
+    {
+      id: "speed" as const,
+      label: "Speed upgrades",
+      value: upgradeRevenue * BUSINESS.upgradeSplit.speed,
+    },
+    {
+      id: "time" as const,
+      label: "Extra boost hours",
+      value: upgradeRevenue * BUSINESS.upgradeSplit.time,
+    },
+  ].map((r) => ({ ...r, share: yearOneRevenue ? r.value / yearOneRevenue : 0 }))
+
+  const capacity = PLAN_ORDER.map((id) => ({
+    plan: id,
+    label: PLANS[id].name,
+    seats: seats[id],
+    subscribers: last.subscribers[id],
+    waitlist: Math.round(waitlist[id]),
   }))
 
-  // Utilization: steady-state slice-hours per site per day. The off-peak share
-  // goes to hours outside peak pricing, the rest to peak hours. Within each group,
-  // hours are weighted by event demand x headroom left on the cell.
-  const dailySliceHours =
-    (bookingsPerSite * a.hoursPerBooking) / BUSINESS.daysPerMonth
-  const isPeak = (h: number) => demandBand(h) === "peak"
-  const baseWeight = BUSINESS.eventPropensity.map(
-    (p, h) =>
-      p *
-      Math.max(
-        0,
-        (BUSINESS.utilizationCap - BUSINESS.baselineUtilization[h]) /
-          BUSINESS.utilizationCap
-      )
-  )
-  const peakSum = baseWeight.reduce((s, w, h) => s + (isPeak(h) ? w : 0), 0)
-  const offSum = baseWeight.reduce((s, w, h) => s + (isPeak(h) ? 0 : w), 0)
-  const utilization = BUSINESS.baselineUtilization.map((before, hour) => {
-    const groupShare = isPeak(hour) ? 1 - a.offPeakShare : a.offPeakShare
-    const groupSum = isPeak(hour) ? peakSum : offSum
-    const concurrentSlices = groupSum
-      ? (dailySliceHours * groupShare * baseWeight[hour]) / groupSum
-      : 0
-    const added = concurrentSlices * BUSINESS.avgSliceCapacityShare * 100
-    return {
-      hour,
-      label: hourLabel(hour),
-      before,
-      after: Math.min(
-        BUSINESS.utilizationCap,
-        Math.max(before, before + added)
-      ),
-    }
-  })
-
-  const avgUtilizationBefore = mean(utilization.map((u) => u.before))
-  const avgUtilizationAfter = mean(utilization.map((u) => u.after))
-  const nonPeak = utilization.filter((u) => !isPeak(u.hour))
-
-  // Funnel: unique first-time customers through to enterprise upgrade leads.
-  const f = BUSINESS.funnel
-  const firstTime = Math.round(annualBookings / f.bookingsPerCustomer)
-  const repeat = Math.round(firstTime * f.repeatRate)
-  const recurring = Math.round(repeat * f.recurringRate)
-  const upgrade = Math.round(recurring * f.enterpriseUpgradeRate)
+  const businessSubs =
+    last.subscribers.organization + last.subscribers["small-business"]
+  const upgraded = Math.round(last.totalSubscribers * a.upgradeRate)
   const funnel: FunnelStage[] = [
     {
-      stage: "First booking",
-      description: "Unique customers who book once",
-      customers: firstTime,
+      stage: "Free first month",
+      description: "Started a trial",
+      customers: Math.round(totalSignups / BUSINESS.funnel.trialToPaid),
     },
     {
-      stage: "Repeat booking",
-      description: "Book again within the year",
-      customers: repeat,
+      stage: "Paid subscriber",
+      description: "Active at month 12",
+      customers: last.totalSubscribers,
     },
     {
-      stage: "Recurring / multi-site",
-      description: "Regular schedule or several venues",
-      customers: recurring,
+      stage: "Upgraded",
+      description: "Paying for more speed or time",
+      customers: upgraded,
     },
     {
-      stage: "Enterprise upgrade",
-      description: "Referred to an enterprise slicing contract",
-      customers: upgrade,
+      stage: "Enterprise lead",
+      description: "Org or business referred to enterprise slicing",
+      customers: Math.round(
+        businessSubs * BUSINESS.funnel.enterpriseReferralRate
+      ),
     },
   ]
 
   return {
     months,
-    annualRevenue,
-    annualBookings,
+    yearOneRevenue,
+    exitArr: last.totalRevenue * 12,
+    arpu: last.totalSubscribers ? last.totalRevenue / last.totalSubscribers : 0,
     upfrontCost,
-    steadyStateMonthlyRevenue,
-    effectivePrice: price,
     paybackMonths,
-    revenueByUseCase,
-    utilization,
-    avgUtilizationBefore,
-    avgUtilizationAfter,
-    utilizationLiftPts: avgUtilizationAfter - avgUtilizationBefore,
-    utilizationLiftPct:
-      (avgUtilizationAfter - avgUtilizationBefore) / avgUtilizationBefore,
-    nonPeakLiftPts: mean(nonPeak.map((u) => u.after - u.before)),
-    peakLiftPts: mean(
-      utilization.filter((u) => isPeak(u.hour)).map((u) => u.after - u.before)
-    ),
+    revenueMix,
+    capacity,
+    subscribersAtExit: last.totalSubscribers,
+    waitlistAtExit: capacity.reduce((s, c) => s + c.waitlist, 0),
     funnel,
   }
 }
